@@ -128,14 +128,15 @@ class StatusIndicator(QWidget):
         
         color = colors.get(self.status, colors["unknown"])
         
-        # Gradient
-        gradient = QLinearGradient(0, 0, self.width(), self.height())
-        gradient.setColorAt(0, color.lighter(120))
-        gradient.setColorAt(1, color.darker(120))
-        
-        painter.setBrush(QBrush(gradient))
+        # Użyj solidnego koloru zamiast gradientu
+        painter.setBrush(QBrush(color))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawEllipse(2, 2, self.width()-4, self.height()-4)
+        
+        # Dodaj subtelny efekt świecenia przez namalowanie mniejszego koła
+        inner_color = color.lighter(150)
+        painter.setBrush(QBrush(inner_color))
+        painter.drawEllipse(6, 6, self.width()-12, self.height()-12)
 
 class ModernButton(QPushButton):
     """Nowoczesny przycisk z efektami hover"""
@@ -164,42 +165,49 @@ class ModernButton(QPushButton):
         if self.button_type == "primary":
             style = base_style + """
                 QPushButton {
-                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                               stop: 0 #4CAF50, stop: 1 #45a049);
+                    background-color: #4CAF50;
                     color: white;
+                    border: 1px solid #45a049;
                 }
                 QPushButton:hover {
-                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                               stop: 0 #5CBF60, stop: 1 #55b059);
+                    background-color: #5CBF60;
+                    border-color: #55b059;
                 }
                 QPushButton:pressed {
-                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                               stop: 0 #3C9F40, stop: 1 #359039);
+                    background-color: #3C9F40;
+                    border-color: #359039;
                 }
             """
         elif self.button_type == "danger":
             style = base_style + """
                 QPushButton {
-                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                               stop: 0 #f44336, stop: 1 #d32f2f);
+                    background-color: #f44336;
                     color: white;
+                    border: 1px solid #d32f2f;
                 }
                 QPushButton:hover {
-                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                               stop: 0 #f66356, stop: 1 #e34f4f);
+                    background-color: #f66356;
+                    border-color: #e34f4f;
+                }
+                QPushButton:pressed {
+                    background-color: #d32f2f;
+                    border-color: #b71c1c;
                 }
             """
         else:  # secondary
             style = base_style + """
                 QPushButton {
-                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                               stop: 0 #424242, stop: 1 #303030);
+                    background-color: #424242;
                     color: #E0E0E0;
                     border: 1px solid #555;
                 }
                 QPushButton:hover {
-                    background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                               stop: 0 #525252, stop: 1 #404040);
+                    background-color: #525252;
+                    border-color: #666;
+                }
+                QPushButton:pressed {
+                    background-color: #303030;
+                    border-color: #444;
                 }
             """
             
@@ -270,8 +278,8 @@ class TailscaleGUI(QMainWindow):
         header_frame.setFrameStyle(QFrame.Shape.StyledPanel)
         header_frame.setStyleSheet("""
             QFrame {
-                background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
-                                           stop: 0 #2E2E2E, stop: 1 #3E3E3E);
+                background-color: #2A2A2A;
+                border: 1px solid #404040;
                 border-radius: 12px;
                 padding: 10px;
             }
@@ -371,11 +379,11 @@ class TailscaleGUI(QMainWindow):
                 border: 2px solid #555;
                 border-radius: 8px;
                 text-align: center;
-                background: #2E2E2E;
+                background-color: #2E2E2E;
+                color: #E0E0E0;
             }
             QProgressBar::chunk {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                           stop: 0 #4CAF50, stop: 1 #45a049);
+                background-color: #4CAF50;
                 border-radius: 6px;
             }
         """)
@@ -447,14 +455,14 @@ class TailscaleGUI(QMainWindow):
                 border-radius: 12px;
                 margin-top: 8px;
                 padding-top: 10px;
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                           stop: 0 #2A2A2A, stop: 1 #1E1E1E);
+                background-color: #252525;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 8px 0 8px;
                 color: #4CAF50;
+                background-color: transparent;
             }
         """
         
@@ -496,28 +504,37 @@ class TailscaleGUI(QMainWindow):
         """Zastosuj ciemny motyw"""
         self.setStyleSheet("""
             QMainWindow {
-                background: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1,
-                                           stop: 0 #1A1A1A, stop: 1 #0F0F0F);
+                background-color: #1E1E1E;
                 color: #E0E0E0;
             }
             QWidget {
-                background: transparent;
+                background-color: transparent;
                 color: #E0E0E0;
             }
             QLabel {
                 color: #E0E0E0;
+                background-color: transparent;
             }
             QMessageBox {
-                background: #2E2E2E;
+                background-color: #2E2E2E;
                 color: #E0E0E0;
             }
             QMessageBox QPushButton {
-                background: #4CAF50;
+                background-color: #4CAF50;
                 color: white;
                 border: none;
                 border-radius: 4px;
                 padding: 6px 12px;
                 font-weight: bold;
+            }
+            QSplitter::handle {
+                background-color: #404040;
+            }
+            QSplitter::handle:horizontal {
+                width: 3px;
+            }
+            QSplitter::handle:vertical {
+                height: 3px;
             }
         """)
         
