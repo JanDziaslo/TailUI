@@ -1,11 +1,21 @@
-# Tailscale GUI Requirements
-# Ten projekt używa głównie wbudowanych bibliotek Pythona
+# Tailscale GUI Requirements - PyQt6 Version
+
+# Główne zależności
+PyQt6>=6.5.0
 
 # Dla rozwoju i testowania (opcjonalne)
 # pytest>=7.0.0
 # black>=22.0.0
 # flake8>=4.0.0
+# pyqt6-tools>=6.4.0  # Dla Qt Designer
 
 # Uwaga: Aplikacja wymaga zainstalowanego Tailscale w systemie
-# sudo apt install tailscale  # Ubuntu/Debian
-# brew install tailscale      # macOS
+# Ubuntu/Debian: sudo apt install tailscale
+# Fedora: sudo dnf install tailscale  
+# macOS: brew install tailscale
+# Windows: https://tailscale.com/download
+
+# Instalacja PyQt6:
+# pip install PyQt6
+# Ubuntu/Debian: sudo apt install python3-pyqt6
+# Fedora: sudo dnf install python3-qt6
