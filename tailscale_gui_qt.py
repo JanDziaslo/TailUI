@@ -156,9 +156,11 @@ class ModernButton(QPushButton):
                 font-weight: 600;
                 font-size: 13px;
                 min-height: 24px;
+                background-color: #424242;
             }
             QPushButton:disabled {
                 opacity: 0.5;
+                background-color: #2A2A2A;
             }
         """
         
@@ -244,6 +246,7 @@ class TailscaleGUI(QMainWindow):
     def setup_ui(self):
         """Konfiguracja interfejsu użytkownika"""
         central_widget = QWidget()
+        central_widget.setStyleSheet("background-color: #1A1A1A;")
         self.setCentralWidget(central_widget)
         
         # Główny layout
@@ -320,6 +323,7 @@ class TailscaleGUI(QMainWindow):
     def create_controls_panel(self):
         """Stwórz panel kontroli"""
         widget = QWidget()
+        widget.setStyleSheet("background-color: #1A1A1A;")
         layout = QVBoxLayout(widget)
         layout.setSpacing(15)
         
@@ -395,6 +399,7 @@ class TailscaleGUI(QMainWindow):
     def create_info_panel(self):
         """Stwórz panel informacji"""
         widget = QWidget()
+        widget.setStyleSheet("background-color: #1A1A1A;")
         layout = QVBoxLayout(widget)
         
         # Informacje o urządzeniu
@@ -456,13 +461,14 @@ class TailscaleGUI(QMainWindow):
                 margin-top: 8px;
                 padding-top: 10px;
                 background-color: #252525;
+                color: #E0E0E0;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 left: 10px;
                 padding: 0 8px 0 8px;
                 color: #4CAF50;
-                background-color: transparent;
+                background-color: #252525;
             }
         """
         
@@ -504,16 +510,22 @@ class TailscaleGUI(QMainWindow):
         """Zastosuj ciemny motyw"""
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #1E1E1E;
+                background-color: #1A1A1A;
                 color: #E0E0E0;
             }
             QWidget {
-                background-color: transparent;
+                background-color: #1A1A1A;
                 color: #E0E0E0;
             }
             QLabel {
                 color: #E0E0E0;
                 background-color: transparent;
+            }
+            QFrame {
+                background-color: #1A1A1A;
+            }
+            QVBoxLayout, QHBoxLayout, QGridLayout {
+                background-color: #1A1A1A;
             }
             QMessageBox {
                 background-color: #2E2E2E;
@@ -526,6 +538,9 @@ class TailscaleGUI(QMainWindow):
                 border-radius: 4px;
                 padding: 6px 12px;
                 font-weight: bold;
+            }
+            QSplitter {
+                background-color: #1A1A1A;
             }
             QSplitter::handle {
                 background-color: #404040;
