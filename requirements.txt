@@ -1,0 +1,11 @@
+# Tailscale GUI Requirements
+# Ten projekt używa głównie wbudowanych bibliotek Pythona
+
+# Dla rozwoju i testowania (opcjonalne)
+# pytest>=7.0.0
+# black>=22.0.0
+# flake8>=4.0.0
+
+# Uwaga: Aplikacja wymaga zainstalowanego Tailscale w systemie
+# sudo apt install tailscale  # Ubuntu/Debian
+# brew install tailscale      # macOS
