@@ -113,18 +113,11 @@ class MainWindow(QMainWindow):
         self.refresh_btn.setObjectName("RefreshButton")
         top_bar.addWidget(self.refresh_btn)
 
-        self.connect_btn = QPushButton("Połącz")
-        self.connect_btn.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
-        self.connect_btn.clicked.connect(self.start_connection)
-        self.connect_btn.setObjectName("ConnectButton")
-        top_bar.addWidget(self.connect_btn)
-
-        self.disconnect_btn = QPushButton("Rozłącz")
-        self.disconnect_btn.setIcon(self.style().standardIcon(QStyle.SP_MediaStop))
-        self.disconnect_btn.clicked.connect(self.stop_connection)
-        self.disconnect_btn.setEnabled(False)
-        self.disconnect_btn.setObjectName("DisconnectButton")
-        top_bar.addWidget(self.disconnect_btn)
+        self.toggle_button = QPushButton("Połącz")
+        self.toggle_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.toggle_button.clicked.connect(self._handle_toggle_connection)
+        self.toggle_button.setObjectName("ToggleButton")
+        top_bar.addWidget(self.toggle_button)
 
         exit_group = QGroupBox("Exit Node")
         exit_layout = QHBoxLayout(exit_group)
@@ -178,8 +171,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(QStatusBar())
 
         if not self.client:
-            self.connect_btn.setEnabled(False)
-            self.disconnect_btn.setEnabled(False)
+            self.toggle_button.setEnabled(False)
             self.exit_node_combo.setEnabled(False)
             self.exit_use_checkbox.setEnabled(False)
             self.statusBar().showMessage("Tailscale nie jest dostępny w systemie (brak binarki w PATH).")
@@ -236,19 +228,20 @@ class MainWindow(QMainWindow):
                 background-color: #3a3c4a;
                 color: #6272a4;
             }
-            QPushButton#ConnectButton {
+
+            QPushButton#ToggleButton[connected="true"] {
+                background-color: #ff5555;
+                color: #282a36;
+            }
+            QPushButton#ToggleButton[connected="true"]:hover {
+                background-color: #ff7070;
+            }
+            QPushButton#ToggleButton[connected="false"] {
                 background-color: #50fa7b;
                 color: #282a36;
             }
-            QPushButton#ConnectButton:hover {
+            QPushButton#ToggleButton[connected="false"]:hover {
                 background-color: #69ff8c;
-            }
-            QPushButton#DisconnectButton {
-                background-color: #ff5555;
-                 color: #282a36;
-            }
-            QPushButton#DisconnectButton:hover {
-                background-color: #ff7070;
             }
             QTreeWidget {
                 background-color: #2c2e3a;
@@ -298,12 +291,7 @@ class MainWindow(QMainWindow):
     # --- Pomocnicze busy ---
     def _set_busy(self, busy: bool):
         self._busy_toggle = busy
-        if busy:
-            self.connect_btn.setEnabled(False)
-            self.disconnect_btn.setEnabled(False)
-        else:
-            # Stany zostaną ustawione przez refresh_status
-            pass
+        self.toggle_button.setEnabled(not busy)
 
     def _start_poll(self, target_connected: bool, down_started: bool = False):
         if self._poll_timer:
@@ -315,60 +303,67 @@ class MainWindow(QMainWindow):
             self._down_started_at = self._poll_started_at
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_iteration)
-        self._poll_timer.start(300)  # delikatnie szybciej
+        self._poll_timer.start(300)
 
     def _poll_iteration(self):
         if not self.client:
             self._finish_transition(error_msg="Brak klienta")
             return
+
         elapsed = time.time() - self._poll_started_at
-        # Dobierz właściwy timeout (krótszy przy rozłączaniu)
         timeout_limit = self._disconnect_timeout_sec if self._poll_target is False else self._poll_timeout_sec
+
         if elapsed > timeout_limit:
             self._finish_transition(error_msg="Przekroczono czas oczekiwania na zmianę stanu")
             return
+
         try:
             st = self.client.status()
             if st.connected == self._poll_target:
-                self._finish_transition()
+                self._finish_transition(status_msg="Połączono" if st.connected else "Rozłączono")
                 return
-            # Szybka ścieżka: rozłączanie – jeśli minęło >= grace i backend nie jest 'running'
+
             if self._poll_target is False and (time.time() - self._down_started_at) >= self._disconnect_grace_sec:
                 if st.backend_state.lower() != 'running':
-                    self._finish_transition()
+                    self._finish_transition(status_msg="Rozłączono (backend zatrzymany)")
                     return
         except TailscaleError:
-            # Jeśli oczekujemy rozłączenia i status rzuca błąd – traktuj jako sukces
             if self._poll_target is False:
-                self._finish_transition()
+                self._finish_transition(status_msg="Rozłączono (status niedostępny)")
                 return
-        # kontynuujemy polling
 
-    def _finish_transition(self, error_msg: Optional[str] = None, connected: Optional[bool] = None):
+    def _finish_transition(self, error_msg: Optional[str] = None, status_msg: Optional[str] = None):
         if self._poll_timer:
             self._poll_timer.stop()
             self._poll_timer.deleteLater()
             self._poll_timer = None
         self._poll_target = None
         self._set_busy(False)
-        self.connect_btn.setText("Połącz")
-        self.disconnect_btn.setText("Rozłącz")
         self.refresh_status(force=True)
         self.fetch_public_ip()
+
         if error_msg:
             self._error(error_msg)
-        else:
-            if connected is True:
-                self.statusBar().showMessage("Połączono", 4000)
-            elif connected is False:
-                self.statusBar().showMessage("Rozłączono", 4000)
+        elif status_msg:
+            self.statusBar().showMessage(status_msg, 4000)
 
-    def start_connection(self):
+    def _handle_toggle_connection(self):
         if not self.client or self._busy_toggle:
             return
+
+        try:
+            status = self.client.status()
+            if status.connected:
+                self.stop_connection()
+            else:
+                self.start_connection()
+        except TailscaleError as e:
+            self._error(f"Nie można pobrać statusu: {e}")
+
+    def start_connection(self):
         self._set_busy(True)
-        self.connect_btn.setText("Łączenie…")
-        self.statusBar().showMessage("Łączenie…", 4000)
+        self.toggle_button.setText("Łączenie…")
+        self.statusBar().showMessage("Łączenie…")
 
         def run_up():
             err = None
@@ -379,19 +374,14 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 err = f"Nieoczekiwany błąd: {e}"
 
-            def after():
-                self._finish_transition(error_msg=err, connected=not err)
-
-            QTimer.singleShot(0, after)
+            QTimer.singleShot(0, lambda: self._start_poll(True) if not err else self._finish_transition(err))
 
         threading.Thread(target=run_up, daemon=True).start()
 
     def stop_connection(self):
-        if not self.client or self._busy_toggle:
-            return
         self._set_busy(True)
-        self.disconnect_btn.setText("Rozłączanie…")
-        self.statusBar().showMessage("Rozłączanie…", 4000)
+        self.toggle_button.setText("Rozłączanie…")
+        self.statusBar().showMessage("Rozłączanie…")
 
         def run_down():
             err = None
@@ -402,10 +392,7 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 err = f"Nieoczekiwany błąd: {e}"
 
-            def after():
-                self._finish_transition(error_msg=err, connected=False if not err else None)
-
-            QTimer.singleShot(0, after)
+            QTimer.singleShot(0, lambda: self._start_poll(False, down_started=True) if not err else self._finish_transition(err))
 
         threading.Thread(target=run_down, daemon=True).start()
 
@@ -464,9 +451,19 @@ class MainWindow(QMainWindow):
         self.status_label.setText(f"{st.backend_state} | Połączony: {'tak' if st.connected else 'nie'}")
 
         # Aktualizacja stanów przycisków
-        if not self._busy_toggle and self._poll_timer is None:
-            self.connect_btn.setEnabled(not st.connected)
-            self.disconnect_btn.setEnabled(st.connected)
+        if not self._busy_toggle:
+            style = self.style()
+            self.toggle_button.setProperty("connected", st.connected)
+            if st.connected:
+                self.toggle_button.setText("Rozłącz")
+                self.toggle_button.setIcon(style.standardIcon(QStyle.SP_MediaStop))
+            else:
+                self.toggle_button.setText("Połącz")
+                self.toggle_button.setIcon(style.standardIcon(QStyle.SP_MediaPlay))
+
+            self.toggle_button.style().unpolish(self.toggle_button)
+            self.toggle_button.style().polish(self.toggle_button)
+            self.toggle_button.setEnabled(True)
 
         # Aktualizacja listy urządzeń
         self._populate_devices(st)
