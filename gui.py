@@ -243,7 +243,6 @@ class MainWindow(QMainWindow):
             QPushButton#ToggleButton[connected="false"]:hover {
                 background-color: #69ff8c;
             }
-
             QTreeWidget {
                 background-color: #2c2e3a;
                 border: 1px solid #44475a;
