@@ -80,14 +80,13 @@ class MainWindow(QMainWindow):
     def _build_ui(self):
         central = QWidget()
         root_layout = QVBoxLayout(central)
-        root_layout.setContentsMargins(14, 12, 14, 12)
-        root_layout.setSpacing(12)
+        root_layout.setContentsMargins(12, 12, 12, 12)
+        root_layout.setSpacing(10)
         self.setCentralWidget(central)
 
-        # Pasek nagłówka / top bar
         top_bar = QHBoxLayout()
+        top_bar.setSpacing(10)
 
-        # Ikona aplikacji
         icon_path = Path(__file__).parent / 'assets_icon_tailscale.svg'
         if icon_path.exists():
             app_icon = QIcon(str(icon_path))
@@ -95,42 +94,31 @@ class MainWindow(QMainWindow):
             self.icon_label = QLabel()
             pm = QPixmap(str(icon_path))
             if not pm.isNull():
-                self.icon_label.setPixmap(pm.scaled(28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-                self.icon_label.setFixedSize(30, 30)
+                self.icon_label.setPixmap(pm.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                self.icon_label.setFixedSize(32, 32)
                 top_bar.addWidget(self.icon_label)
-        else:
-            self.icon_label = QLabel("◉")
-            top_bar.addWidget(self.icon_label)
 
-        self.title_label = QLabel("Tailscale")  # prostszy tytuł obok ikony
+        self.title_label = QLabel("Tailscale")
         self.title_label.setObjectName("AppTitle")
-
-        style = self.style()
-        # Dwa oddzielne przyciski
-        self.connect_btn = QPushButton("Połącz")
-        self.connect_btn.setIcon(style.standardIcon(QStyle.SP_MediaPlay))
-        self.connect_btn.clicked.connect(self.start_connection)
-        self.disconnect_btn = QPushButton("Rozłącz")
-        self.disconnect_btn.setIcon(style.standardIcon(QStyle.SP_MediaStop))
-        self.disconnect_btn.clicked.connect(self.stop_connection)
-        self.disconnect_btn.setEnabled(False)
-
-        self.refresh_btn = QPushButton("Odśwież")
-        self.refresh_btn.setIcon(style.standardIcon(QStyle.SP_BrowserReload))
-        self.refresh_btn.clicked.connect(self._manual_refresh)
+        top_bar.addWidget(self.title_label)
+        top_bar.addStretch(1)
 
         self.last_refresh_label = QLabel("—")
         self.last_refresh_label.setObjectName("LastRefresh")
-
-        top_bar.addWidget(self.title_label)
-        top_bar.addStretch(1)
         top_bar.addWidget(self.last_refresh_label)
-        top_bar.addSpacing(16)
-        top_bar.addWidget(self.refresh_btn)
-        top_bar.addWidget(self.connect_btn)
-        top_bar.addWidget(self.disconnect_btn)
 
-        # Sekcja Exit node
+        self.refresh_btn = QPushButton("Odśwież")
+        self.refresh_btn.setIcon(self.style().standardIcon(QStyle.SP_BrowserReload))
+        self.refresh_btn.clicked.connect(self._manual_refresh)
+        self.refresh_btn.setObjectName("RefreshButton")
+        top_bar.addWidget(self.refresh_btn)
+
+        self.toggle_button = QPushButton("Połącz")
+        self.toggle_button.setIcon(self.style().standardIcon(QStyle.SP_MediaPlay))
+        self.toggle_button.clicked.connect(self._handle_toggle_connection)
+        self.toggle_button.setObjectName("ToggleButton")
+        top_bar.addWidget(self.toggle_button)
+
         exit_group = QGroupBox("Exit Node")
         exit_layout = QHBoxLayout(exit_group)
         self.exit_use_checkbox = QCheckBox("Używaj exit node")
@@ -139,9 +127,7 @@ class MainWindow(QMainWindow):
         self.exit_node_combo.currentIndexChanged.connect(self._exit_node_changed)
         exit_layout.addWidget(self.exit_use_checkbox)
         exit_layout.addWidget(self.exit_node_combo, 1)
-        exit_layout.addStretch()
 
-        # Panel urządzeń
         devices_group = QGroupBox("Urządzenia w sieci")
         devices_layout = QVBoxLayout(devices_group)
         self.devices_tree = QTreeWidget()
@@ -154,97 +140,159 @@ class MainWindow(QMainWindow):
         self.devices_tree.setUniformRowHeights(True)
         devices_layout.addWidget(self.devices_tree)
 
-        # Panel informacji lokalnych + IP publiczne
-        info_group = QGroupBox("To urządzenie")
+        info_group = QGroupBox("Informacje o urządzeniu")
         info_form = QFormLayout(info_group)
+        info_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         self.status_label = QLabel("-")
         self.self_ips_label = QLabel("-")
         self.public_ip_label = QLabel("-")
         self.public_ip_details_label = QLabel("-")
         self.public_ip_details_label.setWordWrap(True)
-        info_form.addRow("Stan backendu:", self.status_label)
+        info_form.addRow("Stan:", self.status_label)
         info_form.addRow("Adresy Tailnet:", self.self_ips_label)
         info_form.addRow("Publiczne IP:", self.public_ip_label)
         info_form.addRow("Szczegóły IP:", self.public_ip_details_label)
 
-        # Splitter dla elastyczności
-        splitter = QSplitter(Qt.Vertical)
-        upper_container = QWidget()
-        upper_layout = QVBoxLayout(upper_container)
-        upper_layout.setContentsMargins(0, 0, 0, 0)
-        upper_layout.setSpacing(12)
-        upper_layout.addWidget(exit_group)
-        upper_layout.addWidget(devices_group)
-        splitter.addWidget(upper_container)
-        splitter.addWidget(info_group)
-        splitter.setStretchFactor(0, 5)
-        splitter.setStretchFactor(1, 2)
+        main_splitter = QSplitter(Qt.Vertical)
+        top_container = QWidget()
+        top_layout = QVBoxLayout(top_container)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(10)
+        top_layout.addWidget(exit_group)
+        top_layout.addWidget(devices_group)
+        main_splitter.addWidget(top_container)
+        main_splitter.addWidget(info_group)
+        main_splitter.setStretchFactor(0, 3)
+        main_splitter.setStretchFactor(1, 1)
 
         root_layout.addLayout(top_bar)
-        root_layout.addWidget(splitter, 1)
+        root_layout.addWidget(main_splitter, 1)
 
-        # Status bar
         self.setStatusBar(QStatusBar())
 
         if not self.client:
-            self.connect_btn.setEnabled(False)
-            self.disconnect_btn.setEnabled(False)
+            self.toggle_button.setEnabled(False)
             self.exit_node_combo.setEnabled(False)
             self.exit_use_checkbox.setEnabled(False)
-            self.statusBar().showMessage("tailscale nie jest dostępny w systemie (brak binarki w PATH)")
+            self.statusBar().showMessage("Tailscale nie jest dostępny w systemie (brak binarki w PATH).")
 
-    # --- Style / motyw ---
     def _apply_styles(self):
-        # Paleta bazowa ciemna (część dopasowań by lepiej wyglądał tekst / selection)
-        pal = self.palette()
-        pal.setColor(QPalette.Window, QColor(30, 31, 34))
-        pal.setColor(QPalette.Base, QColor(37, 38, 42))
-        pal.setColor(QPalette.AlternateBase, QColor(44, 46, 50))
-        pal.setColor(QPalette.Text, QColor(225, 225, 225))
-        pal.setColor(QPalette.Button, QColor(45, 47, 51))
-        pal.setColor(QPalette.ButtonText, QColor(235, 235, 235))
-        pal.setColor(QPalette.Highlight, QColor(80, 140, 255))
-        pal.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
-        pal.setColor(QPalette.WindowText, QColor(230, 230, 230))
-        self.setPalette(pal)
-
         self.setStyleSheet("""
-            QMainWindow { background-color: #1e1f22; }
-            QLabel { color: #ddd; }
-            QLabel#AppTitle { font-size: 22px; font-weight:600; color: #e6e6e6; }
-            QLabel#LastRefresh { color: #888; font-style: italic; }
-            QGroupBox { border: 1px solid #3f4145; border-radius: 8px; margin-top: 10px; padding-top:18px; }
-            QGroupBox::title { subcontrol-origin: margin; left: 14px; top: 4px; padding: 0 6px; background: #1e1f22; color:#bcbcbc; }
-            QPushButton { background-color: #2d2f33; color: #eee; padding: 8px 18px; border: 1px solid #56595e; border-radius: 6px; font-weight:500; }
-            QPushButton:hover { background-color: #3a3d42; }
-            QPushButton:pressed { background-color: #232528; }
-            QPushButton:disabled { background:#2a2b2f; color:#666; border: 1px solid #333; }
-            QTreeWidget { background: #25262a; border:1px solid #3c3e42; border-radius:6px; }
-            QTreeWidget::item { height: 28px; }
-            QTreeWidget::item:selected { background: #4c6ef5; color: white; }
-            QHeaderView::section { background:#2d2f33; color:#bbb; padding:6px 8px; border:0; border-right:1px solid #444; }
-            QHeaderView::section:last { border-right:0; }
-            QComboBox { background:#25262a; color:#eee; border:1px solid #56595e; border-radius:4px; padding:4px 8px; }
-            QComboBox:disabled { color:#666; }
-            QCheckBox { color:#ccc; }
-            QStatusBar { background:#25262a; color:#999; border-top: 1px solid #383a3e; }
-            QScrollBar:vertical { background:#2a2b2f; width:12px; margin:4px; border-radius:6px; }
-            QScrollBar::handle:vertical { background:#444; min-height:24px; border-radius:6px; }
-            QScrollBar::handle:vertical:hover { background:#555; }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0; }
-            .offline { color:#888; font-style:italic; }
-            .exitNode { color:#ffd479; }
+            QMainWindow {
+                background-color: #282a36;
+            }
+            QLabel {
+                color: #f8f8f2;
+            }
+            QLabel#AppTitle {
+                font-size: 20px;
+                font-weight: bold;
+                color: #bd93f9;
+            }
+            QLabel#LastRefresh {
+                color: #6272a4;
+                font-size: 11px;
+            }
+            QGroupBox {
+                background-color: #2c2e3a;
+                border: 1px solid #44475a;
+                border-radius: 8px;
+                margin-top: 1ex;
+                font-weight: bold;
+                color: #bd93f9;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                subcontrol-position: top left;
+                padding: 0 10px;
+                background-color: #343746;
+                border-radius: 4px;
+                color: #f8f8f2;
+                left: 10px;
+            }
+            QPushButton {
+                background-color: #44475a;
+                color: #f8f8f2;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 6px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #5a5c70;
+            }
+            QPushButton:pressed {
+                background-color: #3a3c4a;
+            }
+            QPushButton:disabled {
+                background-color: #3a3c4a;
+                color: #6272a4;
+            }
+
+            QPushButton#ToggleButton[connected="true"] {
+                background-color: #ff5555;
+                color: #282a36;
+            }
+            QPushButton#ToggleButton[connected="true"]:hover {
+                background-color: #ff7070;
+            }
+            QPushButton#ToggleButton[connected="false"] {
+                background-color: #50fa7b;
+                color: #282a36;
+            }
+            QPushButton#ToggleButton[connected="false"]:hover {
+                background-color: #69ff8c;
+            }
+
+            QTreeWidget {
+                background-color: #2c2e3a;
+                border: 1px solid #44475a;
+                border-radius: 6px;
+                color: #f8f8f2;
+            }
+            QTreeWidget::item {
+                height: 30px;
+                padding: 2px;
+            }
+            QTreeWidget::item:selected {
+                background-color: #44475a;
+            }
+            QHeaderView::section {
+                background-color: #343746;
+                color: #bd93f9;
+                padding: 6px;
+                border: 1px solid #44475a;
+                font-weight: bold;
+            }
+            QComboBox {
+                background-color: #2c2e3a;
+                border: 1px solid #44475a;
+                border-radius: 4px;
+                padding: 4px;
+                color: #f8f8f2;
+            }
+            QComboBox:disabled {
+                color: #6272a4;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QCheckBox {
+                color: #f8f8f2;
+            }
+            QStatusBar {
+                background-color: #21222c;
+                color: #6272a4;
+            }
+            QSplitter::handle {
+                background-color: #44475a;
+            }
         """)
 
     # --- Pomocnicze busy ---
     def _set_busy(self, busy: bool):
         self._busy_toggle = busy
-        if busy:
-            self.connect_btn.setEnabled(False)
-            self.disconnect_btn.setEnabled(False)
-        else:
-            # Stany zostaną ustawione przez refresh_status
-            pass
+        self.toggle_button.setEnabled(not busy)
 
     def _start_poll(self, target_connected: bool, down_started: bool = False):
         if self._poll_timer:
@@ -256,63 +304,67 @@ class MainWindow(QMainWindow):
             self._down_started_at = self._poll_started_at
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self._poll_iteration)
-        self._poll_timer.start(300)  # delikatnie szybciej
+        self._poll_timer.start(300)
 
     def _poll_iteration(self):
         if not self.client:
             self._finish_transition(error_msg="Brak klienta")
             return
+
         elapsed = time.time() - self._poll_started_at
-        # Dobierz właściwy timeout (krótszy przy rozłączaniu)
         timeout_limit = self._disconnect_timeout_sec if self._poll_target is False else self._poll_timeout_sec
+
         if elapsed > timeout_limit:
             self._finish_transition(error_msg="Przekroczono czas oczekiwania na zmianę stanu")
             return
+
         try:
             st = self.client.status()
             if st.connected == self._poll_target:
-                self._finish_transition()
+                self._finish_transition(status_msg="Połączono" if st.connected else "Rozłączono")
                 return
-            # Szybka ścieżka: rozłączanie – jeśli minęło >= grace i backend nie jest 'running'
+
             if self._poll_target is False and (time.time() - self._down_started_at) >= self._disconnect_grace_sec:
                 if st.backend_state.lower() != 'running':
-                    self._finish_transition()
+                    self._finish_transition(status_msg="Rozłączono (backend zatrzymany)")
                     return
         except TailscaleError:
-            # Jeśli oczekujemy rozłączenia i status rzuca błąd – traktuj jako sukces
             if self._poll_target is False:
-                self._finish_transition()
+                self._finish_transition(status_msg="Rozłączono (status niedostępny)")
                 return
-        # kontynuujemy polling
 
-    def _finish_transition(self, error_msg: Optional[str] = None):
+    def _finish_transition(self, error_msg: Optional[str] = None, status_msg: Optional[str] = None):
         if self._poll_timer:
             self._poll_timer.stop()
             self._poll_timer.deleteLater()
             self._poll_timer = None
-        target = self._poll_target
         self._poll_target = None
         self._set_busy(False)
-        # Przywrócenie etykiet
-        self.connect_btn.setText("Połącz")
-        self.disconnect_btn.setText("Rozłącz")
         self.refresh_status(force=True)
+        self.fetch_public_ip()
+
         if error_msg:
             self._error(error_msg)
-        else:
-            # Krótka informacja w pasku
-            if target is True:
-                self.statusBar().showMessage("Połączono", 4000)
-            elif target is False:
-                self.statusBar().showMessage("Rozłączono", 4000)
+        elif status_msg:
+            self.statusBar().showMessage(status_msg, 4000)
 
-    # --- Akcje Połącz / Rozłącz ---
-    def start_connection(self):
+    def _handle_toggle_connection(self):
         if not self.client or self._busy_toggle:
             return
+
+        try:
+            status = self.client.status()
+            if status.connected:
+                self.stop_connection()
+            else:
+                self.start_connection()
+        except TailscaleError as e:
+            self._error(f"Nie można pobrać statusu: {e}")
+
+    def start_connection(self):
         self._set_busy(True)
-        self.connect_btn.setText("Łączenie…")
-        self.statusBar().showMessage("Łączenie…", 4000)
+        self.toggle_button.setText("Łączenie…")
+        self.statusBar().showMessage("Łączenie…")
 
         def run_up():
             err = None
@@ -320,24 +372,17 @@ class MainWindow(QMainWindow):
                 self.client.up([])
             except TailscaleError as e:
                 err = str(e)
-            except Exception as e:  # noqa
+            except Exception as e:
                 err = f"Nieoczekiwany błąd: {e}"
-            # Harmonogram wątku głównego
-            def after():
-                if err:
-                    self._finish_transition(error_msg=err)
-                else:
-                    self._start_poll(target_connected=True)
-            QTimer.singleShot(0, after)
+
+            QTimer.singleShot(0, lambda: self._start_poll(True) if not err else self._finish_transition(err))
 
         threading.Thread(target=run_up, daemon=True).start()
 
     def stop_connection(self):
-        if not self.client or self._busy_toggle:
-            return
         self._set_busy(True)
-        self.disconnect_btn.setText("Rozłączanie…")
-        self.statusBar().showMessage("Rozłączanie…", 4000)
+        self.toggle_button.setText("Rozłączanie…")
+        self.statusBar().showMessage("Rozłączanie…")
 
         def run_down():
             err = None
@@ -345,15 +390,10 @@ class MainWindow(QMainWindow):
                 self.client.down()
             except TailscaleError as e:
                 err = str(e)
-            except Exception as e:  # noqa
+            except Exception as e:
                 err = f"Nieoczekiwany błąd: {e}"
-            def after():
-                if err:
-                    self._finish_transition(error_msg=err)
-                else:
-                    # start poll z parametrem down_started=True
-                    self._start_poll(target_connected=False, down_started=True)
-            QTimer.singleShot(0, after)
+
+            QTimer.singleShot(0, lambda: self._start_poll(False, down_started=True) if not err else self._finish_transition(err))
 
         threading.Thread(target=run_down, daemon=True).start()
 
@@ -364,30 +404,35 @@ class MainWindow(QMainWindow):
     def _exit_use_changed(self, state: int):
         if not self.client:
             return
-        if state == Qt.Checked:
-            self._apply_exit_node_selection()
-        else:
-            try:
-                self.client.set_exit_node(None)
-            except TailscaleError as e:
-                self._error(str(e))
-        self.refresh_status(force=True)
+
+        node_to_set = self.exit_node_combo.currentData() if state == Qt.Checked else None
+
+        try:
+            self.client.set_exit_node(node_to_set)
+        except TailscaleError as e:
+            self._error(str(e))
+        finally:
+            self.refresh_status(force=True)
+            self.fetch_public_ip()
 
     def _exit_node_changed(self, index: int):
-        if not self.client:
+        if not self.client or not self.exit_use_checkbox.isChecked():
             return
-        if self.exit_use_checkbox.isChecked():
-            self._apply_exit_node_selection()
+        self._apply_exit_node_selection()
 
     def _apply_exit_node_selection(self):
         if not self.client:
             return
+
         node_name = self.exit_node_combo.currentData()
+
         try:
             self.client.set_exit_node(node_name)
         except TailscaleError as e:
             self._error(str(e))
-        self.refresh_status(force=True)
+        finally:
+            self.refresh_status(force=True)
+            self.fetch_public_ip()
 
     def _error(self, msg: str):
         self.statusBar().showMessage(msg, 10000)
@@ -407,9 +452,19 @@ class MainWindow(QMainWindow):
         self.status_label.setText(f"{st.backend_state} | Połączony: {'tak' if st.connected else 'nie'}")
 
         # Aktualizacja stanów przycisków
-        if not self._busy_toggle and self._poll_timer is None:
-            self.connect_btn.setEnabled(not st.connected)
-            self.disconnect_btn.setEnabled(st.connected)
+        if not self._busy_toggle:
+            style = self.style()
+            self.toggle_button.setProperty("connected", st.connected)
+            if st.connected:
+                self.toggle_button.setText("Rozłącz")
+                self.toggle_button.setIcon(style.standardIcon(QStyle.SP_MediaStop))
+            else:
+                self.toggle_button.setText("Połącz")
+                self.toggle_button.setIcon(style.standardIcon(QStyle.SP_MediaPlay))
+
+            self.toggle_button.style().unpolish(self.toggle_button)
+            self.toggle_button.style().polish(self.toggle_button)
+            self.toggle_button.setEnabled(True)
 
         # Aktualizacja listy urządzeń
         self._populate_devices(st)
