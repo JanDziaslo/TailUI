@@ -10,33 +10,15 @@ Funkcje:
 - Pobranie publicznego IP + podstawowe dane (org/ASN/miasto/kraj)
 - Automatyczne okresowe odświeżanie (co 5s) + ciemny motyw
 - Asynchroniczne pobieranie publicznego IP (bez blokowania interfejsu)
+- Ikona w zasobniku systemowym z szybkim menu (pokaż/ukryj, połącz, rozłącz, zakończ)
+- Kopiowanie adresów IP do schowka (lokalne IPv4/IPv6 osobno, publiczne, urządzenia z listy – wszystkie/IPv4/IPv6)
 
 ## Wymagania
 - Python 3.10+ (testowane z 3.10/3.11)
 - Zainstalowany klient `tailscale` w PATH (dla pełnej funkcjonalności)
 - Biblioteki z `requirements.txt`
 
-## Instalacja z pakietu DEB
-
-Najnowsze pakiety DEB są dostępne w [Releases](https://github.com/JanDziaslo/tailscale-GUI/releases).
-
-```bash
-# Pobierz najnowszy pakiet DEB z releases
-wget https://github.com/JanDziaslo/tailscale-GUI/releases/latest/download/tailscale-gui_*.deb
-
-# Zainstaluj pakiet
-sudo dpkg -i tailscale-gui_*.deb
-
-# Jeśli wystąpią problemy z zależnościami, napraw je:
-sudo apt-get install -f
-
-# Uruchom aplikację
-tailscale-gui
-```
-
-Po instalacji aplikacja będzie dostępna w menu aplikacji jako "Tailscale GUI".
-
-## Instalacja z kodu źródłowego
+## Instalacja
 ```bash
 python -m venv .venv
 source .venv/bin/activate
@@ -84,13 +66,11 @@ python -m pytest -q
 Aplikacja wywołuje polecenia systemowe `tailscale` poprzez `subprocess`. Nie interpoluje wejścia użytkownika w poleceniach (poza nazwą exit node pobraną z listy zwracanej przez tailscale), co minimalizuje ryzyko injection.
 
 ## Rozszerzenia (pomysły na przyszłość)
-- Ikona w zasobniku systemowym (System Tray)
 - Ręczne odświeżanie + wskaźnik czasu ostatniego odświeżenia
 - Filtrowanie / wyszukiwanie urządzeń
-- Kopiowanie adresów IP do schowka
 - Tryb kompaktowy (mini-window)
 - Wsparcie dla Windows / macOS
 
 ## Licencja
-MIT License - zobacz plik [LICENSE](LICENSE) dla pełnych szczegółów.
+Możesz swobodnie używać i modyfikować (dodaj własną licencję jeśli potrzebujesz formalizacji).
 

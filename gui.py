@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 import time
-from typing import Optional, Dict, Set, Callable
+from typing import Optional, Dict, Set, Callable, List
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal, QObject, QDateTime, QEvent, QRunnable, QThreadPool
@@ -10,10 +10,11 @@ from PySide6.QtGui import QIcon, QColor, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout,
     QComboBox, QGroupBox, QFormLayout, QStatusBar, QMessageBox, QCheckBox,
-    QTreeWidget, QTreeWidgetItem, QStyle, QSplitter, QSizePolicy
+    QTreeWidget, QTreeWidgetItem, QStyle, QSplitter, QSizePolicy, QSystemTrayIcon, QMenu,
+    QToolButton
 )
 
-from tailscale_client import TailscaleClient, TailscaleError, tailscale_available, Device
+from tailscale_client import TailscaleClient, TailscaleError, tailscale_available, Device, Status
 from ip_info import PublicIPFetcher
 
 
@@ -45,6 +46,8 @@ class Worker(QRunnable):
 class MainWindow(QMainWindow):
     REFRESH_MS = 5000
     INTERACTION_DEBOUNCE_MS = 350  # krótka zwłoka po interakcji
+    DEVICE_IPV4_ROLE = Qt.UserRole + 1
+    DEVICE_IPV6_ROLE = Qt.UserRole + 2
 
     def __init__(self):
         super().__init__()
@@ -60,6 +63,18 @@ class MainWindow(QMainWindow):
         self._exit_active_value: Optional[str] = None
         self._exit_has_nodes = False
         self._exit_busy = False
+        self._tray_icon: Optional[QSystemTrayIcon] = None
+        self._tray_connect_action = None
+        self._tray_disconnect_action = None
+        self._tray_show_action = None
+        self._tray_message_shown = False
+        self._tray_force_exit = False
+        self.self_ips_copy_all_btn: Optional[QPushButton] = None
+        self.self_ipv4_copy_btn: Optional[QPushButton] = None
+        self.self_ipv6_copy_btn: Optional[QPushButton] = None
+        self.public_ip_copy_btn: Optional[QPushButton] = None
+        self._self_ipv4_list: List[str] = []
+        self._self_ipv6_list: List[str] = []
         self._public_ip_pending = False
 
         # Timer interakcji (debounce)
@@ -82,6 +97,7 @@ class MainWindow(QMainWindow):
         self._init_client()
         self._build_ui()
         self._apply_styles()
+        self._init_tray()
 
         # Instalacja filtra zdarzeń, aby reagować na aktywność użytkownika
         self.installEventFilter(self)
@@ -208,19 +224,64 @@ class MainWindow(QMainWindow):
         self.devices_tree.setSortingEnabled(True)
         self.devices_tree.sortByColumn(0, Qt.AscendingOrder)
         self.devices_tree.setUniformRowHeights(True)
+        self.devices_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.devices_tree.customContextMenuRequested.connect(self._on_device_context_menu)
+        self.devices_tree.itemDoubleClicked.connect(self._on_device_item_double_clicked)
         devices_layout.addWidget(self.devices_tree)
 
         info_group = QGroupBox("Informacje o urządzeniu")
         info_form = QFormLayout(info_group)
         info_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
         self.status_label = QLabel("-")
+        self.status_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
         self.self_ips_label = QLabel("-")
+        self.self_ips_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.self_ips_copy_all_btn = QPushButton("Kopiuj")
+        self.self_ips_copy_all_btn.setObjectName("CopyButton")
+        self.self_ips_copy_all_btn.setEnabled(False)
+        self.self_ips_copy_all_btn.clicked.connect(
+            lambda: self._copy_label_text(self.self_ips_label, "Adresy Tailnet")
+        )
+
+        self.self_ipv4_copy_btn = QPushButton("IPv4")
+        self.self_ipv4_copy_btn.setObjectName("CopyButton")
+        self.self_ipv4_copy_btn.setEnabled(False)
+        self.self_ipv4_copy_btn.clicked.connect(
+            lambda: self._copy_ips_list(self._self_ipv4_list, "Adresy IPv4 Tailnet")
+        )
+
+        self.self_ipv6_copy_btn = QPushButton("IPv6")
+        self.self_ipv6_copy_btn.setObjectName("CopyButton")
+        self.self_ipv6_copy_btn.setEnabled(False)
+        self.self_ipv6_copy_btn.clicked.connect(
+            lambda: self._copy_ips_list(self._self_ipv6_list, "Adresy IPv6 Tailnet")
+        )
+
         self.public_ip_label = QLabel("-")
+        self.public_ip_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.public_ip_copy_btn = QPushButton("Kopiuj")
+        self.public_ip_copy_btn.setObjectName("CopyButton")
+        self.public_ip_copy_btn.setEnabled(False)
+        self.public_ip_copy_btn.clicked.connect(lambda: self._copy_label_text(self.public_ip_label, "Publiczne IP"))
+
         self.public_ip_details_label = QLabel("-")
         self.public_ip_details_label.setWordWrap(True)
+        self.public_ip_details_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+
         info_form.addRow("Stan:", self.status_label)
-        info_form.addRow("Adresy Tailnet:", self.self_ips_label)
-        info_form.addRow("Publiczne IP:", self.public_ip_label)
+        self_ips_container = QWidget()
+        self_ips_layout = QHBoxLayout(self_ips_container)
+        self_ips_layout.setContentsMargins(0, 0, 0, 0)
+        self_ips_layout.setSpacing(6)
+        self.self_ips_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self_ips_layout.addWidget(self.self_ips_label, 1)
+        self_ips_layout.addWidget(self.self_ips_copy_all_btn)
+        self_ips_layout.addWidget(self.self_ipv4_copy_btn)
+        self_ips_layout.addWidget(self.self_ipv6_copy_btn)
+
+        info_form.addRow("Adresy Tailnet:", self_ips_container)
+        info_form.addRow("Publiczne IP:", self._wrap_with_copy(self.public_ip_label, self.public_ip_copy_btn))
         info_form.addRow("Szczegóły IP:", self.public_ip_details_label)
 
         main_splitter = QSplitter(Qt.Vertical)
@@ -246,6 +307,8 @@ class MainWindow(QMainWindow):
             self.exit_enable_checkbox.setEnabled(False)
             self.exit_apply_btn.setEnabled(False)
             self.statusBar().showMessage("Tailscale nie jest dostępny w systemie (brak binarki w PATH).")
+
+        self._sync_copy_buttons()
 
     def _apply_styles(self):
         self.setStyleSheet("""
@@ -296,6 +359,25 @@ class MainWindow(QMainWindow):
                 background-color: #3a3c4a;
             }
             QPushButton:disabled {
+                background-color: #3a3c4a;
+                color: #6272a4;
+            }
+
+            QToolButton#AddressCopyButton {
+                background-color: #44475a;
+                color: #f8f8f2;
+                border: none;
+                padding: 4px 10px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QToolButton#AddressCopyButton:hover {
+                background-color: #5a5c70;
+            }
+            QToolButton#AddressCopyButton:pressed {
+                background-color: #3a3c4a;
+            }
+            QToolButton#AddressCopyButton:disabled {
                 background-color: #3a3c4a;
                 color: #6272a4;
             }
@@ -359,10 +441,145 @@ class MainWindow(QMainWindow):
             }
         """)
 
+    # --- Zasobnik systemowy ---
+    def _init_tray(self):
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+
+        icon = self.windowIcon()
+        if icon.isNull():
+            icon = self.style().standardIcon(QStyle.SP_ComputerIcon)
+
+        self._tray_icon = QSystemTrayIcon(icon, self)
+        self._tray_icon.setToolTip("Tailscale GUI")
+
+        menu = QMenu(self)
+        self._tray_show_action = menu.addAction("Ukryj okno")
+        self._tray_show_action.triggered.connect(self._toggle_tray_visibility)
+
+        self._tray_connect_action = menu.addAction("Połącz")
+        self._tray_connect_action.triggered.connect(self._on_tray_connect)
+
+        self._tray_disconnect_action = menu.addAction("Rozłącz")
+        self._tray_disconnect_action.triggered.connect(self._on_tray_disconnect)
+
+        menu.addSeparator()
+        quit_action = menu.addAction("Zakończ")
+        quit_action.triggered.connect(self._quit_from_tray)
+
+        self._tray_icon.setContextMenu(menu)
+        self._tray_icon.activated.connect(self._on_tray_activated)
+        self._tray_icon.show()
+
+        app = QApplication.instance()
+        if app:
+            app.aboutToQuit.connect(self._cleanup_tray)
+
+        self._update_tray_menu_status()
+
+    def _quit_from_tray(self):
+        self._tray_force_exit = True
+        QApplication.quit()
+
+    def _cleanup_tray(self):
+        if self._tray_icon:
+            self._tray_icon.hide()
+
+    def _toggle_tray_visibility(self):
+        if self.isHidden():
+            self._show_window_from_tray()
+        else:
+            self._hide_window_to_tray()
+
+    def _on_tray_connect(self):
+        if not self.client or self._busy_toggle:
+            return
+        try:
+            status = self.client.status()
+            if status.connected:
+                self.statusBar().showMessage("Tailscale jest już połączony", 3000)
+                return
+        except TailscaleError:
+            pass
+        self.start_connection()
+
+    def _on_tray_disconnect(self):
+        if not self.client or self._busy_toggle:
+            return
+        try:
+            status = self.client.status()
+            if not status.connected:
+                self.statusBar().showMessage("Tailscale jest już rozłączony", 3000)
+                return
+        except TailscaleError:
+            pass
+        self.stop_connection()
+
+    def _show_window_from_tray(self):
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self._update_tray_menu_status()
+
+    def _hide_window_to_tray(self):
+        self.hide()
+        self._update_tray_menu_status()
+
+    def _on_tray_activated(self, reason):
+        if reason in (QSystemTrayIcon.Trigger, QSystemTrayIcon.DoubleClick):
+            self._toggle_tray_visibility()
+
+    def _update_tray_menu_status(self, status: Optional[Status] = None):
+        if not self._tray_icon:
+            return
+
+        connected = False
+        if status is not None:
+            connected = status.connected
+        else:
+            connected = bool(self.toggle_button.property("connected"))
+
+        can_interact = bool(self.client) and not self._busy_toggle
+
+        if self._tray_connect_action:
+            self._tray_connect_action.setEnabled(can_interact and not connected)
+
+        if self._tray_disconnect_action:
+            self._tray_disconnect_action.setEnabled(can_interact and connected)
+
+        if self._tray_show_action:
+            self._tray_show_action.setText("Ukryj okno" if not self.isHidden() else "Pokaż okno")
+
+        tooltip_state = "połączony" if connected else "rozłączony"
+        self._tray_icon.setToolTip(f"Tailscale GUI — {tooltip_state}")
+
+    def closeEvent(self, event):
+        if self._tray_icon and self._tray_icon.isVisible() and not self._tray_force_exit:
+            event.ignore()
+            self._hide_window_to_tray()
+            if not self._tray_message_shown:
+                self._tray_icon.showMessage(
+                    "Tailscale GUI",
+                    "Aplikacja działa w tle w zasobniku.",
+                    QSystemTrayIcon.Information,
+                    4000,
+                )
+                self._tray_message_shown = True
+            return
+
+        if self._tray_force_exit:
+            self._cleanup_tray()
+        super().closeEvent(event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self._update_tray_menu_status()
+
     # --- Pomocnicze busy ---
     def _set_busy(self, busy: bool):
         self._busy_toggle = busy
         self.toggle_button.setEnabled(not busy)
+        self._update_tray_menu_status()
 
     def _start_poll(self, target_connected: bool, down_started: bool = False):
         if self._poll_timer:
@@ -609,6 +826,58 @@ class MainWindow(QMainWindow):
             can_apply = can_disable
         self.exit_apply_btn.setEnabled(can_apply)
 
+    @staticmethod
+    def _wrap_with_copy(label: QLabel, button: QPushButton) -> QWidget:
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(6)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        layout.addWidget(label, 1)
+        layout.addWidget(button)
+        return container
+
+    @staticmethod
+    def _has_copyable_text(label: QLabel) -> bool:
+        if not label:
+            return False
+        text = (label.text() or "").strip()
+        return bool(text and text != "-")
+
+    def _copy_label_text(self, label: QLabel, description: str):
+        if not label:
+            return
+        text = (label.text() or "").strip()
+        if not text or text == "-":
+            self.statusBar().showMessage(f"Brak danych do skopiowania ({description})", 3000)
+            return
+        self._copy_to_clipboard(text, description)
+
+    def _copy_ips_list(self, ips: List[str], description: str):
+        cleaned = [ip.strip() for ip in ips if ip and ip.strip()]
+        if not cleaned:
+            self.statusBar().showMessage(f"Brak danych do skopiowania ({description})", 3000)
+            return
+        self._copy_to_clipboard("\n".join(cleaned), description)
+
+    def _copy_to_clipboard(self, text: str, description: str):
+        normalized = (text or "").strip()
+        if not normalized:
+            self.statusBar().showMessage(f"Brak danych do skopiowania ({description})", 3000)
+            return
+        QApplication.clipboard().setText(normalized)
+        self.statusBar().showMessage(f"{description} skopiowane do schowka", 4000)
+
+    def _sync_copy_buttons(self):
+        if self.self_ips_copy_all_btn:
+            self.self_ips_copy_all_btn.setEnabled(self._has_copyable_text(self.self_ips_label))
+        if self.self_ipv4_copy_btn:
+            self.self_ipv4_copy_btn.setEnabled(bool(self._self_ipv4_list))
+        if self.self_ipv6_copy_btn:
+            self.self_ipv6_copy_btn.setEnabled(bool(self._self_ipv6_list))
+        if self.public_ip_copy_btn:
+            self.public_ip_copy_btn.setEnabled(self._has_copyable_text(self.public_ip_label))
+
     def _on_exit_toggle_checkbox(self, checked: bool):
         if checked and self._exit_has_nodes and self.exit_node_combo.currentIndex() == -1:
             self.exit_node_combo.setCurrentIndex(0)
@@ -676,7 +945,9 @@ class MainWindow(QMainWindow):
         if not self.client:
             self._exit_has_nodes = False
             self._exit_active_value = None
+            self._update_self_ips(None)
             self._sync_exit_controls_enabled()
+            self._update_tray_menu_status()
             return
         try:
             st = self.client.status()
@@ -685,7 +956,10 @@ class MainWindow(QMainWindow):
             self._exit_has_nodes = False
             self._exit_active_value = None
             self._sync_exit_controls_enabled()
+            self._update_self_ips(None)
             return
+
+        self._update_tray_menu_status(st)
 
         # Status tekstowy
         self.status_label.setText(f"{st.backend_state} | Połączony: {'tak' if st.connected else 'nie'}")
@@ -709,10 +983,7 @@ class MainWindow(QMainWindow):
         self._populate_devices(st)
 
         # Adresy własne
-        if st.self_device:
-            self.self_ips_label.setText(", ".join(st.self_device.tailnet_ips) or "-")
-        else:
-            self.self_ips_label.setText("-")
+        self._update_self_ips(st.self_device)
 
         self._refresh_exit_nodes(st)
 
@@ -732,7 +1003,19 @@ class MainWindow(QMainWindow):
                 flags.append("offline")
             status_text = "online" if d.online else "offline"
             exit_text = "tak" if d.is_exit_node else ("możliwy" if d.exit_node_option else "-")
-            ips = ", ".join(d.tailnet_ips) if d.tailnet_ips else "-"
+            ipv4_list: List[str] = []
+            ipv6_list: List[str] = []
+            if d.tailnet_ips:
+                for ip in d.tailnet_ips:
+                    normalized = (ip or "").strip()
+                    if not normalized:
+                        continue
+                    if ":" in normalized:
+                        ipv6_list.append(normalized)
+                    else:
+                        ipv4_list.append(normalized)
+
+            ips = ", ".join(ip for ip in (d.tailnet_ips or []) if ip) if (d.tailnet_ips) else "-"
             item = QTreeWidgetItem([
                 d.name,
                 ips,
@@ -740,15 +1023,130 @@ class MainWindow(QMainWindow):
                 exit_text,
                 d.os or "-"
             ])
+            item.setData(1, self.DEVICE_IPV4_ROLE, ipv4_list)
+            item.setData(1, self.DEVICE_IPV6_ROLE, ipv6_list)
             if not d.online:
                 for col in range(self.devices_tree.columnCount()):
                     item.setForeground(col, QColor('#888'))
             if d.is_exit_node:
                 item.setForeground(3, QColor('#ffd479'))
             self.devices_tree.addTopLevelItem(item)
+            address_widget = self._create_device_addresses_widget(ips, ipv4_list, ipv6_list)
+            self.devices_tree.setItemWidget(item, 1, address_widget)
         for i in range(self.devices_tree.columnCount()):
             self.devices_tree.resizeColumnToContents(i)
         self.devices_tree.setColumnWidth(1, min(self.devices_tree.columnWidth(1), 360))
+
+    def _create_device_addresses_widget(self, addresses_text: str, ipv4_list: List[str], ipv6_list: List[str]) -> QWidget:
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(4, 0, 4, 0)
+        layout.setSpacing(4)
+
+        label = QLabel(addresses_text or "-")
+        label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        layout.addWidget(label, 1)
+
+        if ipv4_list:
+            ipv4_btn = QToolButton(container)
+            ipv4_btn.setText("IPv4")
+            ipv4_btn.setObjectName("AddressCopyButton")
+            ipv4_btn.setAutoRaise(True)
+            ipv4_btn.setFocusPolicy(Qt.NoFocus)
+            ipv4_btn.setCursor(Qt.PointingHandCursor)
+            ipv4_btn.setToolTip("Skopiuj adresy IPv4")
+            ipv4_btn.clicked.connect(
+                lambda _=False, ips=list(ipv4_list): self._copy_ips_list(ips, "Adresy IPv4 urządzenia")
+            )
+            layout.addWidget(ipv4_btn)
+
+        if ipv6_list:
+            ipv6_btn = QToolButton(container)
+            ipv6_btn.setText("IPv6")
+            ipv6_btn.setObjectName("AddressCopyButton")
+            ipv6_btn.setAutoRaise(True)
+            ipv6_btn.setFocusPolicy(Qt.NoFocus)
+            ipv6_btn.setCursor(Qt.PointingHandCursor)
+            ipv6_btn.setToolTip("Skopiuj adresy IPv6")
+            ipv6_btn.clicked.connect(
+                lambda _=False, ips=list(ipv6_list): self._copy_ips_list(ips, "Adresy IPv6 urządzenia")
+            )
+            layout.addWidget(ipv6_btn)
+
+        return container
+
+    def _update_self_ips(self, device: Optional[Device]):
+        self._self_ipv4_list = []
+        self._self_ipv6_list = []
+
+        if not device or not device.tailnet_ips:
+            self.self_ips_label.setText("-")
+            self._sync_copy_buttons()
+            return
+
+        for ip in device.tailnet_ips:
+            normalized = (ip or "").strip()
+            if not normalized:
+                continue
+            if ":" in normalized:
+                self._self_ipv6_list.append(normalized)
+            else:
+                self._self_ipv4_list.append(normalized)
+
+        segments = []
+        if self._self_ipv4_list:
+            segments.append(f"IPv4: {', '.join(self._self_ipv4_list)}")
+        if self._self_ipv6_list:
+            segments.append(f"IPv6: {', '.join(self._self_ipv6_list)}")
+
+        if not segments:
+            segments.append(", ".join(ip for ip in device.tailnet_ips if ip))
+
+        self.self_ips_label.setText(" | ".join(segments) if segments else "-")
+        self._sync_copy_buttons()
+
+    def _on_device_context_menu(self, pos):
+        item = self.devices_tree.itemAt(pos)
+        if not item:
+            return
+
+        menu = QMenu(self.devices_tree)
+        name = item.text(0).strip()
+        addresses = item.text(1).strip()
+        ipv4_list = item.data(1, self.DEVICE_IPV4_ROLE) or []
+        ipv6_list = item.data(1, self.DEVICE_IPV6_ROLE) or []
+
+        if name:
+            menu.addAction("Kopiuj nazwę", lambda text=name: self._copy_to_clipboard(text, "Nazwa urządzenia"))
+        if addresses and addresses != "-":
+            menu.addAction(
+                "Kopiuj adresy (wszystkie)",
+                lambda text=addresses: self._copy_to_clipboard(text.replace(", ", "\n"), "Adresy urządzenia")
+            )
+        if ipv4_list:
+            menu.addAction(
+                "Kopiuj adresy IPv4",
+                lambda ips=list(ipv4_list): self._copy_ips_list(ips, "Adresy IPv4 urządzenia")
+            )
+        if ipv6_list:
+            menu.addAction(
+                "Kopiuj adresy IPv6",
+                lambda ips=list(ipv6_list): self._copy_ips_list(ips, "Adresy IPv6 urządzenia")
+            )
+
+        if menu.actions():
+            global_pos = self.devices_tree.viewport().mapToGlobal(pos)
+            menu.exec(global_pos)
+
+    def _on_device_item_double_clicked(self, item, column):
+        if column == 1:
+            addresses = item.text(1).strip()
+            if addresses and addresses != "-":
+                self._copy_to_clipboard(addresses.replace(", ", "\n"), "Adresy urządzenia")
+        elif column == 0:
+            name = item.text(0).strip()
+            if name:
+                self._copy_to_clipboard(name, "Nazwa urządzenia")
 
     def fetch_public_ip(self, force: bool = False):
         if self._public_ip_pending:
@@ -796,6 +1194,7 @@ class MainWindow(QMainWindow):
         if not info:
             self.public_ip_label.setText("Nie udało się pobrać")
             self.public_ip_details_label.setText("-")
+            self._sync_copy_buttons()
             return
         self.public_ip_label.setText(info.ip)
         details_parts = []
@@ -809,6 +1208,7 @@ class MainWindow(QMainWindow):
         if loc_parts:
             details_parts.append(", ".join(loc_parts))
         self.public_ip_details_label.setText(" | ".join(details_parts) or "-")
+        self._sync_copy_buttons()
 
 
 # --- Uruchomienie ---
