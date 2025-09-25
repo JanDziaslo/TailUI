@@ -561,14 +561,12 @@ class MainWindow(QMainWindow):
             self._last_exit_node_choice = node_to_set
             self._run_exit_node_command(
                 lambda: self.client.set_exit_node(node_to_set),
-                pending_state=(True, node_to_set),
-                on_error=lambda: self._set_exit_checkbox_checked(False)
+                pending_state=(True, node_to_set)
             )
         else:
             self._run_exit_node_command(
                 lambda: self.client.set_exit_node(None),
-                pending_state=(False, None),
-                on_error=lambda: self._set_exit_checkbox_checked(True)
+                pending_state=(False, None)
             )
 
     def _exit_node_changed(self, index: int):
