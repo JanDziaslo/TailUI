@@ -92,5 +92,5 @@ Aplikacja wywołuje polecenia systemowe `tailscale` poprzez `subprocess`. Nie in
 - Wsparcie dla Windows / macOS
 
 ## Licencja
-Możesz swobodnie używać i modyfikować (dodaj własną licencję jeśli potrzebujesz formalizacji).
+MIT License - zobacz plik [LICENSE](LICENSE) dla pełnych szczegółów.
 

@@ -64,6 +64,11 @@ jobs:
           cp requirements.txt ${PACKAGE_DIR}/usr/share/${PACKAGE_NAME}/
           cp assets_icon_tailscale.svg ${PACKAGE_DIR}/usr/share/pixmaps/tailscale-gui.svg
           
+          # Copy documentation
+          mkdir -p ${PACKAGE_DIR}/usr/share/doc/${PACKAGE_NAME}
+          cp LICENSE ${PACKAGE_DIR}/usr/share/doc/${PACKAGE_NAME}/copyright
+          cp README.md ${PACKAGE_DIR}/usr/share/doc/${PACKAGE_NAME}/
+          
           # Create wrapper script
           cat > ${PACKAGE_DIR}/usr/bin/tailscale-gui << 'EOF'
           #!/bin/bash
