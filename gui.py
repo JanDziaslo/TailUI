@@ -546,14 +546,36 @@ class MainWindow(QMainWindow):
                 return
 
             node_to_set = self.exit_node_combo.currentData()
-            if node_to_set is None:
+            
+            # If no node is currently selected, try to select the first one
+            if node_to_set is None and self.exit_node_combo.count() > 0:
                 self.exit_node_combo.blockSignals(True)
                 self.exit_node_combo.setCurrentIndex(0)
                 self.exit_node_combo.blockSignals(False)
                 node_to_set = self.exit_node_combo.currentData()
 
+            # If we still don't have a node, try using the last choice or first available
             if not node_to_set:
-                self.statusBar().showMessage("Wybierz exit node z listy", 4000)
+                # Try to use the last exit node choice if it's in the current list
+                if self._last_exit_node_choice:
+                    for i in range(self.exit_node_combo.count()):
+                        if self.exit_node_combo.itemData(i) == self._last_exit_node_choice:
+                            self.exit_node_combo.blockSignals(True)
+                            self.exit_node_combo.setCurrentIndex(i)
+                            self.exit_node_combo.blockSignals(False)
+                            node_to_set = self.exit_node_combo.currentData()
+                            break
+                
+                # If still no node, just use the first one if available
+                if not node_to_set and self.exit_node_combo.count() > 0:
+                    self.exit_node_combo.blockSignals(True)
+                    self.exit_node_combo.setCurrentIndex(0)
+                    self.exit_node_combo.blockSignals(False)
+                    node_to_set = self.exit_node_combo.currentData()
+
+            # If we still don't have a node, something is wrong
+            if not node_to_set:
+                self.statusBar().showMessage("Nie można wybrać exit node z listy", 4000)
                 self._set_exit_checkbox_checked(False)
                 return
 
@@ -752,6 +774,11 @@ class MainWindow(QMainWindow):
                     if idx >= 0:
                         self.exit_node_combo.setCurrentIndex(idx)
                         break
+        
+        # If no selection was made and combo has items, select the first one
+        if self.exit_node_combo.count() > 0 and self.exit_node_combo.currentIndex() == -1:
+            self.exit_node_combo.setCurrentIndex(0)
+            
         self.exit_node_combo.blockSignals(False)
         self.exit_node_combo.setEnabled(bool(st.exit_nodes))
 
