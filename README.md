@@ -4,11 +4,12 @@ Lekka aplikacja desktopowa (Linux) zapewniająca podstawowe sterowanie Tailscale
 
 Funkcje:
 - Włączanie / wyłączanie połączenia (`tailscale up` / `tailscale down`)
-- Wybór i przełączanie exit node (lub wyłączenie używania exit node)
+- Sekcja exit node z przełącznikiem i przyciskiem „Zastosuj” do włączania/wyłączania wybranego węzła
 - Lista urządzeń (nazwa, adresy Tailnet, status online, oznaczenie exit node)
 - Podgląd lokalnych adresów Tailscale urządzenia
 - Pobranie publicznego IP + podstawowe dane (org/ASN/miasto/kraj)
 - Automatyczne okresowe odświeżanie (co 5s) + ciemny motyw
+- Asynchroniczne pobieranie publicznego IP (bez blokowania interfejsu)
 
 ## Wymagania
 - Python 3.10+ (testowane z 3.10/3.11)
@@ -50,7 +51,7 @@ update-desktop-database ~/.local/share/applications || true
 
 ## Testy
 ```bash
-pytest -q
+python -m pytest -q
 ```
 
 ## Struktura
