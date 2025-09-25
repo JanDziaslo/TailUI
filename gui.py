@@ -547,16 +547,9 @@ class MainWindow(QMainWindow):
 
             node_to_set = self.exit_node_combo.currentData()
             
-            # If no node is currently selected, try to select the first one
-            if node_to_set is None and self.exit_node_combo.count() > 0:
-                self.exit_node_combo.blockSignals(True)
-                self.exit_node_combo.setCurrentIndex(0)
-                self.exit_node_combo.blockSignals(False)
-                node_to_set = self.exit_node_combo.currentData()
-
-            # If we still don't have a node, try using the last choice or first available
-            if not node_to_set:
-                # Try to use the last exit node choice if it's in the current list
+            # If no node is currently selected, try to find a good selection
+            if node_to_set is None:
+                # First try to use the last exit node choice if it's in the current list
                 if self._last_exit_node_choice:
                     for i in range(self.exit_node_combo.count()):
                         if self.exit_node_combo.itemData(i) == self._last_exit_node_choice:
