@@ -120,3 +120,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# DEB packaging
+*.deb
+tailscale-gui_*/
