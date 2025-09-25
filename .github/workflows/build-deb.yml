@@ -74,6 +74,13 @@ jobs:
           cp LICENSE ${PACKAGE_DIR}/usr/share/doc/${PACKAGE_NAME}/copyright
           cp README.md ${PACKAGE_DIR}/usr/share/doc/${PACKAGE_NAME}/
           
+          # Validate essential files are present
+          echo "Validating package contents..."
+          test -f ${PACKAGE_DIR}/usr/share/${PACKAGE_NAME}/main.py || { echo "ERROR: main.py missing"; exit 1; }
+          test -f ${PACKAGE_DIR}/usr/share/${PACKAGE_NAME}/gui.py || { echo "ERROR: gui.py missing"; exit 1; }
+          test -f ${PACKAGE_DIR}/usr/share/${PACKAGE_NAME}/tailscale_client.py || { echo "ERROR: tailscale_client.py missing"; exit 1; }
+          test -f ${PACKAGE_DIR}/usr/share/pixmaps/tailscale-gui.svg || { echo "ERROR: icon missing"; exit 1; }
+          
           # Create wrapper script
           cat > ${PACKAGE_DIR}/usr/bin/tailscale-gui << 'EOF'
           #!/bin/bash
@@ -195,3 +202,12 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fail_on_unmatched_files: true
         continue-on-error: false
+        
+      - name: Release upload fallback
+        if: failure() && (github.event_name == 'release' || (startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push'))
+        run: |
+          echo "Release upload failed. Checking if it's due to existing release..."
+          echo "Tag: ${GITHUB_REF#refs/tags/}"
+          echo "DEB files available:"
+          ls -la *.deb || echo "No DEB files found"
+          echo "You may need to manually upload the DEB package to the release."
