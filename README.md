@@ -1,5 +1,5 @@
 # Tailscale GUI (PySide6)
-
+ 
 Lekka aplikacja desktopowa (Linux) zapewniająca podstawowe sterowanie Tailscale:
 
 Funkcje:
