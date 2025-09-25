@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  actions: read
+  id-token: write
 
 jobs:
   build-deb:
@@ -168,9 +170,28 @@ jobs:
           name: ${{ env.PACKAGE_NAME }}-deb
           path: "*.deb"
           
+      - name: Debug GitHub context
+        run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Ref type: ${{ github.ref_type }}"
+          echo "Is tag: ${{ startsWith(github.ref, 'refs/tags/') }}"
+          echo "Is version tag: ${{ startsWith(github.ref, 'refs/tags/v') }}"
+          echo "Should create release: ${{ github.event_name == 'release' || (startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push') }}"
+          
+      - name: Create release notes
+        if: github.event_name == 'release' || (startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push')
+        run: |
+          echo "Creating release for version tag: ${GITHUB_REF#refs/tags/}"
+          echo "Package file: ${{ env.PACKAGE_FILE }}"
+          ls -la *.deb || echo "No .deb files found"
+          
       - name: Upload to release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
+        if: github.event_name == 'release' || (startsWith(github.ref, 'refs/tags/v') && github.event_name == 'push')
+        uses: softprops/action-gh-release@v2
         with:
           files: "*.deb"
           generate_release_notes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fail_on_unmatched_files: true
+        continue-on-error: false
