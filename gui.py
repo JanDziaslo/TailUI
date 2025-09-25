@@ -3,10 +3,10 @@ from __future__ import annotations
 import sys
 import threading
 import time
-from typing import Optional
+from typing import Optional, Tuple, Dict
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Signal, QObject, QDateTime, QEvent
+from PySide6.QtCore import Qt, QTimer, Signal, QObject, QDateTime, QEvent, QRunnable, QThreadPool
 from PySide6.QtGui import QIcon, QPalette, QColor, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout,
@@ -22,6 +22,26 @@ class WorkerSignals(QObject):
     error = Signal(str)
     finished = Signal(object)
 
+    def __init__(self, parent: Optional[QObject] = None):
+        super().__init__(parent)
+
+
+class Worker(QRunnable):
+    def __init__(self, fn, *, parent: Optional[QObject] = None):
+        super().__init__()
+        self.fn = fn
+        self.signals = WorkerSignals(parent)
+
+    def run(self):
+        try:
+            result = self.fn()
+        except TailscaleError as e:
+            self.signals.error.emit(str(e))
+        except Exception as e:
+            self.signals.error.emit(f"Nieoczekiwany błąd: {e}")
+        else:
+            self.signals.finished.emit(result)
+
 
 class MainWindow(QMainWindow):
     REFRESH_MS = 5000
@@ -36,6 +56,11 @@ class MainWindow(QMainWindow):
         self.ip_fetcher = PublicIPFetcher(ttl=180)
         self._last_refresh_ts: Optional[float] = None
         self._busy_toggle = False  # blokada wielokrotnego przełączania
+        self._exit_action_in_progress = False
+        self._exit_action_expected: Optional[Tuple[bool, Optional[str]]] = None
+        self._last_exit_node_choice: Optional[str] = None
+        self._exit_node_alias_map: Dict[str, str] = {}
+        self._exit_node_display: Dict[str, str] = {}
 
         # Timer interakcji (debounce)
         self._interaction_timer = QTimer(self)
@@ -51,6 +76,9 @@ class MainWindow(QMainWindow):
         self._disconnect_grace_sec = 1.5    # po tym czasie uznaj rozłączenie jeśli brak błędów
         self._down_started_at: float = 0.0
 
+        self._thread_pool = QThreadPool(self)
+        self._active_workers = []
+
         self._init_client()
         self._build_ui()
         self._apply_styles()
@@ -64,6 +92,30 @@ class MainWindow(QMainWindow):
         self.timer.start(self.REFRESH_MS)
         self.refresh_status()
         self.fetch_public_ip()
+
+    def _submit_worker(self, fn, on_success, on_error):
+        worker = Worker(fn, parent=self)
+        self._active_workers.append(worker)
+
+        def _cleanup():
+            if worker in self._active_workers:
+                self._active_workers.remove(worker)
+
+        def _handle_success(result):
+            try:
+                on_success(result)
+            finally:
+                _cleanup()
+
+        def _handle_error(msg: str):
+            try:
+                on_error(msg)
+            finally:
+                _cleanup()
+
+        worker.signals.finished.connect(_handle_success)
+        worker.signals.error.connect(_handle_error)
+        self._thread_pool.start(worker)
 
     # --- Inicjalizacja klienta ---
     def _init_client(self):
@@ -364,58 +416,165 @@ class MainWindow(QMainWindow):
         self._set_busy(True)
         self.toggle_button.setText("Łączenie…")
         self.statusBar().showMessage("Łączenie…")
+        desired_exit_node = None
+        if self.exit_use_checkbox.isChecked():
+            desired_exit_node = self.exit_node_combo.currentData()
+            if desired_exit_node is None and self.exit_node_combo.count() > 0:
+                self.exit_node_combo.blockSignals(True)
+                self.exit_node_combo.setCurrentIndex(0)
+                self.exit_node_combo.blockSignals(False)
+                desired_exit_node = self.exit_node_combo.currentData()
+            if desired_exit_node:
+                desired_exit_node = str(desired_exit_node)
+                self._begin_exit_operation(True, desired_exit_node)
 
-        def run_up():
-            err = None
-            try:
-                self.client.up([])
-            except TailscaleError as e:
-                err = str(e)
-            except Exception as e:
-                err = f"Nieoczekiwany błąd: {e}"
+        def run_up_and_maybe_exit():
+            self.client.up([])
+            if desired_exit_node:
+                self.client.set_exit_node(desired_exit_node)
 
-            QTimer.singleShot(0, lambda: self._start_poll(True) if not err else self._finish_transition(err))
+        self._submit_worker(
+            run_up_and_maybe_exit,
+            lambda _: self._handle_connection_success(bool(desired_exit_node)),
+            lambda msg: self._handle_connection_error(msg, bool(desired_exit_node))
+        )
 
-        threading.Thread(target=run_up, daemon=True).start()
+    def _handle_connection_success(self, exit_node_requested: bool):
+        if exit_node_requested:
+            self._end_exit_operation(True)
+        self._start_poll(True)
+
+    def _handle_connection_error(self, msg: str, exit_node_requested: bool):
+        if exit_node_requested:
+            self._end_exit_operation(False)
+        self._finish_transition(error_msg=msg)
 
     def stop_connection(self):
         self._set_busy(True)
         self.toggle_button.setText("Rozłączanie…")
         self.statusBar().showMessage("Rozłączanie…")
-
-        def run_down():
-            err = None
-            try:
-                self.client.down()
-            except TailscaleError as e:
-                err = str(e)
-            except Exception as e:
-                err = f"Nieoczekiwany błąd: {e}"
-
-            QTimer.singleShot(0, lambda: self._start_poll(False, down_started=True) if not err else self._finish_transition(err))
-
-        threading.Thread(target=run_down, daemon=True).start()
+        self._submit_worker(
+            self.client.down,
+            lambda _: self._start_poll(False, down_started=True),
+            lambda msg: self._finish_transition(error_msg=msg)
+        )
 
     def _manual_refresh(self):
         self.refresh_status(force=True)
         self.fetch_public_ip()
 
+    def _run_exit_node_command(self, fn, *, pending_state: Optional[Tuple[bool, Optional[str]]] = None,
+                               on_success=None, on_error=None):
+        was_busy = self._busy_toggle
+        if not was_busy:
+            self._set_busy(True)
+
+        self.exit_use_checkbox.setEnabled(False)
+        self.exit_node_combo.setEnabled(False)
+
+        status_message = "Ustawianie exit node…"
+        if pending_state is not None:
+            self._begin_exit_operation(*pending_state)
+            enable_flag, target_value = pending_state
+            if enable_flag:
+                status_message = f"Ustawianie exit node: {self._exit_node_label(target_value)}"
+            else:
+                status_message = "Wyłączanie exit node…"
+        self.statusBar().showMessage(status_message)
+
+        def _finalize():
+            if not was_busy:
+                self._set_busy(False)
+            self.exit_use_checkbox.setEnabled(True)
+            self.exit_node_combo.setEnabled(True)
+            self.refresh_status(force=True)
+            self.fetch_public_ip()
+
+        def _success_wrapper():
+            if on_success:
+                on_success()
+            message = "Exit node ustawiony"
+            if pending_state is not None:
+                enable_flag, target_value = pending_state
+                if enable_flag:
+                    message = f"Exit node ustawiony: {self._exit_node_label(target_value)}"
+                else:
+                    message = "Exit node wyłączony"
+                self._end_exit_operation(True)
+            self.statusBar().showMessage(message, 3000)
+            _finalize()
+
+        def _error_wrapper(msg: str):
+            if pending_state is not None:
+                self._end_exit_operation(False)
+            if on_error:
+                on_error()
+            self._error(msg)
+            _finalize()
+
+        self._submit_worker(fn, lambda _: _success_wrapper(), _error_wrapper)
+
+    def _set_exit_checkbox_checked(self, checked: bool):
+        self.exit_use_checkbox.blockSignals(True)
+        self.exit_use_checkbox.setChecked(checked)
+        self.exit_use_checkbox.blockSignals(False)
+
+    def _begin_exit_operation(self, enabled: bool, node_name: Optional[str]):
+        self._exit_action_in_progress = True
+        self._exit_action_expected = (enabled, node_name)
+        if enabled and node_name:
+            self._last_exit_node_choice = node_name
+
+    def _end_exit_operation(self, success: bool):
+        self._exit_action_in_progress = False
+        if not success:
+            self._exit_action_expected = None
+
+    def _exit_node_label(self, target: Optional[str]) -> str:
+        if not target:
+            return "brak"
+        return self._exit_node_display.get(target, str(target))
+
     def _exit_use_changed(self, state: int):
         if not self.client:
             return
 
-        node_to_set = self.exit_node_combo.currentData() if state == Qt.Checked else None
+        if state == Qt.Checked:
+            if self.exit_node_combo.count() == 0:
+                self.statusBar().showMessage("Brak dostępnych exit node", 4000)
+                self._set_exit_checkbox_checked(False)
+                return
 
-        try:
-            self.client.set_exit_node(node_to_set)
-        except TailscaleError as e:
-            self._error(str(e))
-        finally:
-            self.refresh_status(force=True)
-            self.fetch_public_ip()
+            node_to_set = self.exit_node_combo.currentData()
+            if node_to_set is None:
+                self.exit_node_combo.blockSignals(True)
+                self.exit_node_combo.setCurrentIndex(0)
+                self.exit_node_combo.blockSignals(False)
+                node_to_set = self.exit_node_combo.currentData()
+
+            if not node_to_set:
+                self.statusBar().showMessage("Wybierz exit node z listy", 4000)
+                self._set_exit_checkbox_checked(False)
+                return
+
+            node_to_set = str(node_to_set)
+            self._last_exit_node_choice = node_to_set
+            self._run_exit_node_command(
+                lambda: self.client.set_exit_node(node_to_set),
+                pending_state=(True, node_to_set),
+                on_error=lambda: self._set_exit_checkbox_checked(False)
+            )
+        else:
+            self._run_exit_node_command(
+                lambda: self.client.set_exit_node(None),
+                pending_state=(False, None),
+                on_error=lambda: self._set_exit_checkbox_checked(True)
+            )
 
     def _exit_node_changed(self, index: int):
         if not self.client or not self.exit_use_checkbox.isChecked():
+            return
+        if self.exit_node_combo.currentData() is None:
             return
         self._apply_exit_node_selection()
 
@@ -423,15 +582,17 @@ class MainWindow(QMainWindow):
         if not self.client:
             return
 
-        node_name = self.exit_node_combo.currentData()
+        node_target = self.exit_node_combo.currentData()
+        if not node_target:
+            self.statusBar().showMessage("Wybierz exit node z listy", 4000)
+            return
 
-        try:
-            self.client.set_exit_node(node_name)
-        except TailscaleError as e:
-            self._error(str(e))
-        finally:
-            self.refresh_status(force=True)
-            self.fetch_public_ip()
+        node_target = str(node_target)
+        self._last_exit_node_choice = node_target
+        self._run_exit_node_command(
+            lambda: self.client.set_exit_node(node_target),
+            pending_state=(True, node_target)
+        )
 
     def _error(self, msg: str):
         self.statusBar().showMessage(msg, 10000)
@@ -475,16 +636,126 @@ class MainWindow(QMainWindow):
             self.self_ips_label.setText("-")
 
         # Exit nodes combo
-        current_data = self.exit_node_combo.currentData()
+        active_exit_device = st.active_exit_node
+        active_aliases = set()
+        if active_exit_device:
+            if active_exit_device.name:
+                active_aliases.add(str(active_exit_device.name))
+            ips = [str(ip) for ip in (active_exit_device.tailnet_ips or []) if ip]
+            active_aliases.update(ips)
+            hostinfo = active_exit_device.hostinfo or {}
+            for key in ("Hostname", "DNSName"):
+                val = hostinfo.get(key)
+                if val:
+                    active_aliases.add(str(val))
+            if active_exit_device.device_id:
+                active_aliases.add(str(active_exit_device.device_id))
+
+        previous_selection = self.exit_node_combo.currentData()
+        if previous_selection is not None:
+            previous_selection = str(previous_selection)
         self.exit_node_combo.blockSignals(True)
         self.exit_node_combo.clear()
+        self._exit_node_alias_map.clear()
+        self._exit_node_display.clear()
         for d in st.exit_nodes:
-            self.exit_node_combo.addItem(d.name, d.name)
-        if current_data:
-            idx = self.exit_node_combo.findData(current_data)
+            command_source = d.device_id or next((ip for ip in (d.tailnet_ips or []) if ip), None) or d.name
+            if not command_source:
+                continue
+            command_value = str(command_source)
+            display_name = str(d.name or command_value)
+            self.exit_node_combo.addItem(display_name, command_value)
+            self._exit_node_display[command_value] = display_name
+            aliases = {command_value}
+            if d.name:
+                aliases.add(str(d.name))
+            if d.device_id:
+                aliases.add(str(d.device_id))
+            if d.tailnet_ips:
+                aliases.update(str(ip) for ip in d.tailnet_ips if ip)
+            hostinfo = d.hostinfo or {}
+            for key in ("Hostname", "DNSName"):
+                val = hostinfo.get(key)
+                if val:
+                    aliases.add(str(val))
+            for alias in aliases:
+                if alias:
+                    self._exit_node_alias_map[alias] = command_value
+
+        available_targets = set(self._exit_node_display.keys())
+        if previous_selection not in available_targets:
+            previous_selection = None
+
+        active_command_value = None
+        if active_exit_device:
+            for alias in active_aliases:
+                mapped = self._exit_node_alias_map.get(alias)
+                if mapped:
+                    active_command_value = mapped
+                    break
+            if not active_command_value and active_exit_device.device_id:
+                active_command_value = str(active_exit_device.device_id)
+        if active_command_value:
+            active_aliases.add(active_command_value)
+            self._last_exit_node_choice = active_command_value
+
+        expected_enabled: Optional[bool] = None
+        expected_target: Optional[str] = None
+        expectation_matches = False
+        if self._exit_action_expected:
+            expected_enabled, expected_target = self._exit_action_expected
+            if expected_target is not None and not isinstance(expected_target, str):
+                expected_target = str(expected_target)
+                self._exit_action_expected = (expected_enabled, expected_target)
+            actual_enabled = active_exit_device is not None
+            if expected_enabled:
+                if actual_enabled:
+                    if expected_target:
+                        expectation_matches = (
+                            expected_target == active_command_value
+                            or expected_target in active_aliases
+                        )
+                    else:
+                        expectation_matches = True
+            else:
+                expectation_matches = not actual_enabled
+
+        if self._exit_action_expected and not self._exit_action_in_progress and expectation_matches:
+            self._exit_action_expected = None
+
+        if self._exit_action_in_progress or (self._exit_action_expected and not expectation_matches):
+            checkbox_checked = bool(expected_enabled)
+        else:
+            checkbox_checked = active_exit_device is not None
+
+        self.exit_use_checkbox.blockSignals(True)
+        self.exit_use_checkbox.setChecked(checkbox_checked)
+        self.exit_use_checkbox.setEnabled(bool(st.exit_nodes))
+        self.exit_use_checkbox.blockSignals(False)
+
+        preferred = None
+        if self._exit_action_in_progress or (self._exit_action_expected and not expectation_matches):
+            if expected_enabled and expected_target:
+                preferred = expected_target
+            else:
+                preferred = expected_target or previous_selection or active_command_value or self._last_exit_node_choice
+        else:
+            preferred = active_command_value or previous_selection or self._last_exit_node_choice
+
+        if preferred and preferred in available_targets:
+            idx = self.exit_node_combo.findData(preferred)
             if idx >= 0:
                 self.exit_node_combo.setCurrentIndex(idx)
+        elif active_exit_device:
+            for alias in active_aliases:
+                translated = self._exit_node_alias_map.get(alias)
+                if translated and translated in available_targets:
+                    idx = self.exit_node_combo.findData(translated)
+                    if idx >= 0:
+                        self.exit_node_combo.setCurrentIndex(idx)
+                        break
         self.exit_node_combo.blockSignals(False)
+        self.exit_node_combo.setEnabled(bool(st.exit_nodes))
 
         # Znacznik czasu
         self._last_refresh_ts = time.time()
