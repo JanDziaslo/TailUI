@@ -23,7 +23,7 @@ fi
 # Pobranie wersji z pliku lub ustawienie domyślnej
 VERSION="1.0.0"
 PACKAGE_NAME="tailscale-gui"
-MAINTAINER="Jan Dziasło <jan@example.com>"
+MAINTAINER="Jan Dziasło i Ropucha"
 
 echo -e "${YELLOW}Wersja pakietu: $VERSION${NC}"
 
