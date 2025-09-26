@@ -11,11 +11,31 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout,
     QComboBox, QGroupBox, QFormLayout, QStatusBar, QMessageBox, QCheckBox,
     QTreeWidget, QTreeWidgetItem, QStyle, QSplitter, QSizePolicy, QSystemTrayIcon, QMenu,
-    QToolButton
+    QToolButton, QHeaderView
 )
 
 from tailscale_client import TailscaleClient, TailscaleError, tailscale_available, Device, Status
 from ip_info import PublicIPFetcher
+
+
+ICON_FILENAMES = ("assets_icon_tailscale.svg", "assets_icon_tailscale.png")
+
+
+def _resolve_app_icon_path() -> Optional[Path]:
+    base_dir = Path(__file__).parent
+    for name in ICON_FILENAMES:
+        candidate = base_dir / name
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _load_app_icon() -> Optional[QIcon]:
+    icon_path = _resolve_app_icon_path()
+    if not icon_path:
+        return None
+    icon = QIcon(str(icon_path))
+    return icon if not icon.isNull() else None
 
 
 class WorkerSignals(QObject):
@@ -155,13 +175,16 @@ class MainWindow(QMainWindow):
         top_bar = QHBoxLayout()
         top_bar.setSpacing(10)
 
-        icon_path = Path(__file__).parent / 'assets_icon_tailscale.svg'
-        if icon_path.exists():
-            app_icon = QIcon(str(icon_path))
+        app_icon = _load_app_icon()
+        if app_icon:
             self.setWindowIcon(app_icon)
-            self.icon_label = QLabel()
-            pm = QPixmap(str(icon_path))
+            pm = app_icon.pixmap(32, 32)
+            if pm.isNull():
+                icon_path = _resolve_app_icon_path()
+                if icon_path:
+                    pm = QPixmap(str(icon_path))
             if not pm.isNull():
+                self.icon_label = QLabel()
                 self.icon_label.setPixmap(pm.scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
                 self.icon_label.setFixedSize(32, 32)
                 top_bar.addWidget(self.icon_label)
@@ -223,11 +246,20 @@ class MainWindow(QMainWindow):
         self.devices_tree.setAlternatingRowColors(True)
         self.devices_tree.setSortingEnabled(True)
         self.devices_tree.sortByColumn(0, Qt.AscendingOrder)
-        self.devices_tree.setUniformRowHeights(True)
+        self.devices_tree.setUniformRowHeights(False)
         self.devices_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.devices_tree.customContextMenuRequested.connect(self._on_device_context_menu)
         self.devices_tree.itemDoubleClicked.connect(self._on_device_item_double_clicked)
         devices_layout.addWidget(self.devices_tree)
+        header = self.devices_tree.header()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.Stretch)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setMinimumSectionSize(120)
+        header.resizeSection(1, 420)
 
         info_group = QGroupBox("Informacje o urządzeniu")
         info_form = QFormLayout(info_group)
@@ -403,8 +435,7 @@ class MainWindow(QMainWindow):
                 color: #f8f8f2;
             }
             QTreeWidget::item {
-                height: 30px;
-                padding: 2px;
+                padding: 4px 2px;
             }
             QTreeWidget::item:selected {
                 background-color: #44475a;
@@ -1033,18 +1064,27 @@ class MainWindow(QMainWindow):
             self.devices_tree.addTopLevelItem(item)
             address_widget = self._create_device_addresses_widget(ips, ipv4_list, ipv6_list)
             self.devices_tree.setItemWidget(item, 1, address_widget)
+        header = self.devices_tree.header()
         for i in range(self.devices_tree.columnCount()):
+            if i == 1:
+                continue
             self.devices_tree.resizeColumnToContents(i)
-        self.devices_tree.setColumnWidth(1, min(self.devices_tree.columnWidth(1), 360))
+
+        # Zapewnij minimalną szerokość dla kolumny adresów, ale pozwól jej wypełniać resztę miejsca
+        if header.sectionSize(1) < 420:
+            header.resizeSection(1, 420)
 
     def _create_device_addresses_widget(self, addresses_text: str, ipv4_list: List[str], ipv6_list: List[str]) -> QWidget:
         container = QWidget()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(4, 0, 4, 0)
         layout.setSpacing(4)
+        container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
         label = QLabel(addresses_text or "-")
         label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        label.setWordWrap(True)
+        label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         layout.addWidget(label, 1)
 
         if ipv4_list:
@@ -1215,7 +1255,12 @@ class MainWindow(QMainWindow):
 
 def run():
     app = QApplication(sys.argv)
+    app_icon = _load_app_icon()
+    if app_icon:
+        app.setWindowIcon(app_icon)
     win = MainWindow()
+    if app_icon:
+        win.setWindowIcon(app_icon)
     win.show()
     sys.exit(app.exec())
 
