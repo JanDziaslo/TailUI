@@ -56,7 +56,7 @@ class PublicIPFetcher:
             ("https://ipapi.co/json", self._parse_ipapi),
             ("https://ifconfig.co/json", self._parse_ifconfig),
         ]
-        headers = {"User-Agent": "tailscale-gui/1.0"}
+        headers = {"User-Agent": "tailui/1.0"}
         for url, parser in endpoints:
             try:
                 r = requests.get(url, timeout=5, headers=headers)

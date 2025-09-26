@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Skrypt do tworzenia pakietu .deb dla Tailscale GUI
+# Skrypt do tworzenia pakietu .deb dla TailUI (nieoficjalny interfejs Tailscale)
 # Autor: Automatycznie wygenerowany skrypt
 
 set -e
@@ -12,7 +12,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}=== Tworzenie pakietu .deb dla Tailscale GUI ===${NC}"
+echo -e "${BLUE}=== Tworzenie pakietu .deb dla TailUI ===${NC}"
 
 # Sprawdź czy jesteśmy w katalogu projektu
 if [ ! -f "main.py" ] || [ ! -f "requirements.txt" ]; then
@@ -21,8 +21,8 @@ if [ ! -f "main.py" ] || [ ! -f "requirements.txt" ]; then
 fi
 
 # Pobranie wersji z pliku lub ustawienie domyślnej
-VERSION="1.0.0"
-PACKAGE_NAME="tailscale-gui"
+VERSION="1.0.2"
+PACKAGE_NAME="tailui"
 MAINTAINER="Jan Dziasło i Ropucha"
 
 echo -e "${YELLOW}Wersja pakietu: $VERSION${NC}"
@@ -53,9 +53,9 @@ Architecture: all
 Depends: python3 (>= 3.10), python3-pyside6.qtcore, python3-pyside6.qtwidgets, python3-pyside6.qtgui, python3-requests, tailscale, python3-pkg-resources
 Recommends: python3-pyside6.qtnetwork
 Maintainer: $MAINTAINER
-Description: Graficzny interfejs użytkownika dla Tailscale
+Description: TailUI — nieoficjalny interfejs Tailscale
  Lekka aplikacja desktopowa (Linux) zapewniająca podstawowe sterowanie
- Tailscale z następującymi funkcjami:
+ Tailnetem z następującymi funkcjami:
   * Włączanie/wyłączanie połączenia Tailscale
   * Zarządzanie exit nodes z przełącznikiem
   * Lista urządzeń z statusem online
@@ -64,7 +64,7 @@ Description: Graficzny interfejs użytkownika dla Tailscale
   * Ikona w zasobniku systemowym
   * Kopiowanie adresów IP do schowka
   * Ciemny motyw interfejsu
-Homepage: https://github.com/JanDziaslo/tailscale-GUI
+Homepage: https://github.com/JanDziaslo/tailui
 EOF
 
 # Stwórz plik copyright
@@ -72,7 +72,7 @@ echo -e "${YELLOW}Tworzenie pliku copyright${NC}"
 mkdir -p "$BUILD_DIR/usr/share/doc/$PACKAGE_NAME"
 cat > "$BUILD_DIR/usr/share/doc/$PACKAGE_NAME/copyright" << EOF
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Source: https://github.com/JanDziaslo/tailscale-GUI
+Source: https://github.com/JanDziaslo/tailui
 
 Files: *
 Copyright: 2025 Jan Dziasło
@@ -103,7 +103,7 @@ cat > "$BUILD_DIR/DEBIAN/postinst" << 'EOF'
 set -e
 
 # Nadanie uprawnień do wykonania
-chmod +x /usr/bin/tailscale-gui
+chmod +x /usr/bin/tailui
 
 # Aktualizacja bazy danych aplikacji desktop
 if command -v update-desktop-database >/dev/null 2>&1; then
@@ -115,8 +115,8 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -q /usr/share/icons/hicolor || true
 fi
 
-echo "Tailscale GUI został zainstalowany."
-echo "Możesz uruchomić aplikację przez menu aplikacji lub poleceniem: tailscale-gui"
+echo "TailUI został zainstalowany."
+echo "Możesz uruchomić aplikację przez menu aplikacji lub poleceniem: tailui"
 
 exit 0
 EOF
@@ -127,7 +127,7 @@ cat > "$BUILD_DIR/DEBIAN/prerm" << 'EOF'
 #!/bin/bash
 set -e
 
-echo "Usuwanie Tailscale GUI..."
+echo "Usuwanie TailUI..."
 
 exit 0
 EOF
@@ -158,9 +158,9 @@ chmod 755 "$BUILD_DIR/DEBIAN/postrm"
 
 # Stwórz skrypt uruchamiający
 echo -e "${YELLOW}Tworzenie skryptu uruchamiającego${NC}"
-cat > "$BUILD_DIR/usr/bin/tailscale-gui" << EOF
+cat > "$BUILD_DIR/usr/bin/tailui" << EOF
 #!/bin/bash
-# Skrypt uruchamiający dla Tailscale GUI
+# Skrypt uruchamiający dla TailUI
 
 # Przejdź do katalogu z aplikacją
 cd /usr/share/$PACKAGE_NAME
@@ -170,20 +170,20 @@ exec python3 main.py "\$@"
 EOF
 
 # Nadanie uprawnień do wykonania
-chmod 755 "$BUILD_DIR/usr/bin/tailscale-gui"
+chmod 755 "$BUILD_DIR/usr/bin/tailui"
 
 # Stwórz plik .desktop
 echo -e "${YELLOW}Tworzenie pliku .desktop${NC}"
 cat > "$BUILD_DIR/usr/share/applications/$PACKAGE_NAME.desktop" << EOF
 [Desktop Entry]
 Type=Application
-Name=Tailscale GUI
-Comment=Graficzny interfejs użytkownika dla Tailscale
-Comment[en]=Graphical user interface for Tailscale
+Name=TailUI
+Comment=Nieoficjalny interfejs Tailscale
+Comment[en]=Unofficial TailUI interface for Tailscale
 GenericName=Network Management
 GenericName[pl]=Zarządzanie siecią
-Exec=tailscale-gui
-Icon=tailscale-gui
+Exec=tailui
+Icon=/usr/share/tailui/assets_icon_tailui.svg
 Terminal=false
 Categories=Network;System;
 StartupNotify=true
@@ -196,20 +196,21 @@ echo -e "${YELLOW}Sprawdzanie ikon aplikacji${NC}"
 
 # 1. Obsługa ikony PNG dla menu systemowego
 PNG_ICON_FOUND=false
-if [ -f "assets_icon_tailscale.png" ]; then
-    echo -e "${GREEN}Znaleziono ikonę PNG: assets_icon_tailscale.png${NC}"
+if [ -f "assets_icon_tailui.png" ]; then
+    echo -e "${GREEN}Znaleziono ikonę PNG: assets_icon_tailui.png${NC}"
     PNG_ICON_FOUND=true
 
     # Skopiuj ikonę do właściwego katalogu systemowego
-    cp "assets_icon_tailscale.png" "$BUILD_DIR/usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png"
+    cp "assets_icon_tailui.png" "$BUILD_DIR/usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png"
+    cp "assets_icon_tailui.png" "$BUILD_DIR/usr/share/$PACKAGE_NAME/assets_icon_tailui.png"
 
     # Sprawdź czy ikona wymaga zmiany rozmiaru
     if command -v identify >/dev/null 2>&1; then
-        SIZE=$(identify -format "%wx%h" "assets_icon_tailscale.png" 2>/dev/null || echo "unknown")
+        SIZE=$(identify -format "%wx%h" "assets_icon_tailui.png" 2>/dev/null || echo "unknown")
         if [ "$SIZE" != "48x48" ] && [ "$SIZE" != "unknown" ]; then
             echo -e "${YELLOW}Ikona PNG ma rozmiar $SIZE, przeskalowuję do 48x48${NC}"
             if command -v convert >/dev/null 2>&1; then
-                convert "assets_icon_tailscale.png" -resize 48x48 "$BUILD_DIR/usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png"
+                convert "assets_icon_tailui.png" -resize 48x48 "$BUILD_DIR/usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png"
             else
                 echo -e "${YELLOW}ImageMagick nie jest dostępny - używam ikony w oryginalnym rozmiarze${NC}"
             fi
@@ -218,24 +219,24 @@ if [ -f "assets_icon_tailscale.png" ]; then
         fi
     fi
 else
-    echo -e "${YELLOW}Brak ikony PNG: assets_icon_tailscale.png${NC}"
+    echo -e "${YELLOW}Brak ikony PNG: assets_icon_tailui.png${NC}"
 fi
 
 # 2. Obsługa ikony SVG dla aplikacji i systemu
 SVG_ICON_FOUND=false
-if [ -f "assets_icon_tailscale.svg" ]; then
-    echo -e "${GREEN}Znaleziono ikonę SVG: assets_icon_tailscale.svg${NC}"
+if [ -f "assets_icon_tailui.svg" ]; then
+    echo -e "${GREEN}Znaleziono ikonę SVG: assets_icon_tailui.svg${NC}"
     SVG_ICON_FOUND=true
 
     # Skopiuj ikonę SVG do katalogu aplikacji (dla użycia przez program)
-    cp "assets_icon_tailscale.svg" "$BUILD_DIR/usr/share/$PACKAGE_NAME/"
+    cp "assets_icon_tailui.svg" "$BUILD_DIR/usr/share/$PACKAGE_NAME/"
     echo -e "${GREEN}Ikona SVG skopiowana do katalogu aplikacji${NC}"
 
     # Skopiuj ikonę SVG również do katalogu systemowego ikon
-    cp "assets_icon_tailscale.svg" "$BUILD_DIR/usr/share/icons/hicolor/scalable/apps/$PACKAGE_NAME.svg"
+    cp "assets_icon_tailui.svg" "$BUILD_DIR/usr/share/icons/hicolor/scalable/apps/$PACKAGE_NAME.svg"
     echo -e "${GREEN}Ikona SVG skopiowana do katalogu systemowego${NC}"
 else
-    echo -e "${YELLOW}Brak ikony SVG: assets_icon_tailscale.svg${NC}"
+    echo -e "${YELLOW}Brak ikony SVG: assets_icon_tailui.svg${NC}"
 fi
 
 # 3. Fallback - stwórz podstawową ikonę jeśli nie ma żadnej
@@ -252,11 +253,28 @@ if [ "$PNG_ICON_FOUND" = false ] && [ "$SVG_ICON_FOUND" = false ]; then
 elif [ "$PNG_ICON_FOUND" = false ] && [ "$SVG_ICON_FOUND" = true ]; then
     echo -e "${YELLOW}Brak ikony PNG - tworzenie PNG z SVG${NC}"
     if command -v convert >/dev/null 2>&1; then
-        convert -size 48x48 "assets_icon_tailscale.svg" "$BUILD_DIR/usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png"
+    convert -size 48x48 "assets_icon_tailui.svg" "$BUILD_DIR/usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png"
+    cp "$BUILD_DIR/usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png" "$BUILD_DIR/usr/share/$PACKAGE_NAME/assets_icon_tailui.png"
         echo -e "${GREEN}Utworzono ikonę PNG z SVG${NC}"
     else
         echo -e "${YELLOW}ImageMagick nie jest dostępny - PNG pozostanie brakujące${NC}"
     fi
+fi
+
+# Upewnij się, że w katalogu aplikacji znajduje się co najmniej jedna ikona PNG
+if [ ! -f "$BUILD_DIR/usr/share/$PACKAGE_NAME/assets_icon_tailui.png" ]; then
+    if [ -f "$BUILD_DIR/usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png" ]; then
+        cp "$BUILD_DIR/usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png" "$BUILD_DIR/usr/share/$PACKAGE_NAME/assets_icon_tailui.png"
+    elif [ -f "assets_icon_tailui.png" ]; then
+        cp "assets_icon_tailui.png" "$BUILD_DIR/usr/share/$PACKAGE_NAME/assets_icon_tailui.png"
+    fi
+fi
+
+DESKTOP_FILE="$BUILD_DIR/usr/share/applications/$PACKAGE_NAME.desktop"
+if [ "$SVG_ICON_FOUND" = true ]; then
+    sed -i 's|^Icon=.*|Icon=/usr/share/tailui/assets_icon_tailui.svg|' "$DESKTOP_FILE"
+elif [ -f "$BUILD_DIR/usr/share/$PACKAGE_NAME/assets_icon_tailui.png" ]; then
+    sed -i 's|^Icon=.*|Icon=/usr/share/tailui/assets_icon_tailui.png|' "$DESKTOP_FILE"
 fi
 
 # Skopiuj pliki aplikacji
@@ -338,7 +356,7 @@ if [ "$PNG_ICON_FOUND" = true ]; then
     echo -e "  ✅ PNG: /usr/share/icons/hicolor/48x48/apps/$PACKAGE_NAME.png"
 fi
 if [ "$SVG_ICON_FOUND" = true ]; then
-    echo -e "  ✅ SVG (aplikacja): /usr/share/$PACKAGE_NAME/assets_icon_tailscale.svg"
+    echo -e "  ✅ SVG (aplikacja): /usr/share/$PACKAGE_NAME/assets_icon_tailui.svg"
     echo -e "  ✅ SVG (system): /usr/share/icons/hicolor/scalable/apps/$PACKAGE_NAME.svg"
 fi
 echo ""

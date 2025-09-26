@@ -1,8 +1,10 @@
-# Tailscale GUI (PySide6)
+# TailUI (PySide6)
 
-> 🇵🇱 Lekka aplikacja desktopowa dla Linuksa, oferująca pełne sterowanie Tailscale z poziomu graficznego interfejsu.
+> 🇵🇱 TailUI to lekka aplikacja desktopowa dla Linuksa, która zapewnia wygodne sterowanie Tailscale z poziomu graficznego interfejsu Qt.
 >
-> 🇬🇧 Lightweight Linux desktop app that brings Tailscale controls into a friendly PySide6 GUI.
+> 🇬🇧 TailUI is a lightweight Linux desktop app that surfaces Tailscale controls in a friendly PySide6 interface.
+
+> ⚠️ **Zastrzeżenie / Disclaimer**: TailUI nie jest oficjalnym produktem Tailscale Inc. Nazwa „Tailscale” oraz znak słowny Tailscale® pozostają własnością Tailscale Inc. i zostały użyte jedynie w celach informacyjnych. TailUI is an independent open-source project and is not affiliated with or endorsed by Tailscale Inc.; “Tailscale” and Tailscale® remain trademarks of Tailscale Inc. used here for identification purposes only.
 
 ## 🇵🇱 Informacje po polsku
 
@@ -33,10 +35,10 @@ python main.py
 Jeśli `tailscale` nie znajduje się w `PATH`, interfejs przełączy się w tryb tylko podgląd (brak możliwości połączenia/rozłączenia czy zmiany exit node).
 
 ### Pakowanie
-- **PyInstaller (pojedyncza binarka):**
+- **PyInstaller (pojedyncza binarka TailUI):**
 	```bash
 	pip install pyinstaller
-	pyinstaller --name tailscale-gui --onefile main.py
+	pyinstaller --name tailui --onefile main.py
 	```
 	Wynik znajduje się w katalogu `dist/`.
 - **Pakiet .deb:** skorzystaj ze skryptu `build_deb.sh` (wymaga `fakeroot`, `dpkg-deb`, opcjonalnie `lintian`).
@@ -44,7 +46,7 @@ Jeśli `tailscale` nie znajduje się w `PATH`, interfejs przełączy się w tryb
 	chmod +x build_deb.sh
 	./build_deb.sh
 	```
-	Gotowy pakiet pojawi się jako `tailscale-gui_1.0.0_all.deb` w katalogu projektu.
+	Gotowy pakiet pojawi się jako `tailui_1.0.2_all.deb` w katalogu projektu.
 
 ### Testy
 ```bash
@@ -68,7 +70,6 @@ python -m pytest -q
 - Filtrowanie i wyszukiwarka urządzeń w widoku listy.
 - Tryb kompaktowy (mini okno lub widżet zasobnika).
 - Obsługa powiadomień systemowych o zmianie stanu połączenia.
-- Port na Windows i macOS (aktualnie wsparcie testowane tylko na Linuksie).
 
 ### Licencja
 Projekt jest objęty licencją MIT – szczegóły w pliku `LICENSE`.
@@ -104,10 +105,10 @@ python main.py
 When `tailscale` is not detected, the GUI disables all mutating actions and behaves as an observer only.
 
 ### Packaging
-- **PyInstaller (single executable):**
+- **PyInstaller (single TailUI executable):**
 	```bash
 	pip install pyinstaller
-	pyinstaller --name tailscale-gui --onefile main.py
+	pyinstaller --name tailui --onefile main.py
 	```
 	The binary will land in `dist/`.
 - **Debian package:** use the `build_deb.sh` helper (requires `fakeroot`, `dpkg-deb`, optionally `lintian`).
@@ -115,7 +116,7 @@ When `tailscale` is not detected, the GUI disables all mutating actions and beha
 	chmod +x build_deb.sh
 	./build_deb.sh
 	```
-	The resulting artifact is `tailscale-gui_1.0.0_all.deb` in the project root.
+	The resulting artifact is `tailui_1.0.2_all.deb` in the project root.
 
 ### Tests
 ```bash
@@ -139,7 +140,6 @@ python -m pytest -q
 - Device search/filtering within the tree view.
 - Compact / mini window layout for quick status checks.
 - Native desktop notifications on status changes.
-- Cross-platform support (Windows/macOS) once UI and packaging are adapted.
 
 ### License
 Distributed under the MIT License – see `LICENSE` for details.

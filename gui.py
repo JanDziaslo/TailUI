@@ -6,19 +6,19 @@ from typing import Optional, Dict, Set, Callable, List
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Signal, QObject, QDateTime, QEvent, QRunnable, QThreadPool
-from PySide6.QtGui import QIcon, QColor, QPixmap
+from PySide6.QtGui import QIcon, QColor, QPixmap, QGuiApplication
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QHBoxLayout,
     QComboBox, QGroupBox, QFormLayout, QStatusBar, QMessageBox, QCheckBox,
     QTreeWidget, QTreeWidgetItem, QStyle, QSplitter, QSizePolicy, QSystemTrayIcon, QMenu,
-    QToolButton, QHeaderView
+    QToolButton, QHeaderView, QLayout
 )
 
 from tailscale_client import TailscaleClient, TailscaleError, tailscale_available, Device, Status
 from ip_info import PublicIPFetcher
 
 
-ICON_FILENAMES = ("assets_icon_tailscale.svg", "assets_icon_tailscale.png")
+ICON_FILENAMES = ("assets_icon_tailui.png", "assets_icon_tailui.svg")
 
 
 def _resolve_app_icon_path() -> Optional[Path]:
@@ -68,10 +68,11 @@ class MainWindow(QMainWindow):
     INTERACTION_DEBOUNCE_MS = 350  # krótka zwłoka po interakcji
     DEVICE_IPV4_ROLE = Qt.UserRole + 1
     DEVICE_IPV6_ROLE = Qt.UserRole + 2
+    DEVICE_ADDR_TEXT_ROLE = Qt.UserRole + 3
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Tailscale GUI")
+        self.setWindowTitle("TailUI")
         self.resize(1000, 700)
 
         self.client: Optional[TailscaleClient] = None
@@ -96,6 +97,7 @@ class MainWindow(QMainWindow):
         self._self_ipv4_list: List[str] = []
         self._self_ipv6_list: List[str] = []
         self._public_ip_pending = False
+        self._devices_layout_refresh_pending = False
 
         # Timer interakcji (debounce)
         self._interaction_timer = QTimer(self)
@@ -189,7 +191,7 @@ class MainWindow(QMainWindow):
                 self.icon_label.setFixedSize(32, 32)
                 top_bar.addWidget(self.icon_label)
 
-        self.title_label = QLabel("Tailscale")
+        self.title_label = QLabel("TailUI")
         self.title_label.setObjectName("AppTitle")
         top_bar.addWidget(self.title_label)
         top_bar.addStretch(1)
@@ -260,6 +262,7 @@ class MainWindow(QMainWindow):
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setMinimumSectionSize(120)
         header.resizeSection(1, 420)
+        header.sectionResized.connect(self._on_devices_section_resized)
 
         info_group = QGroupBox("Informacje o urządzeniu")
         info_form = QFormLayout(info_group)
@@ -482,7 +485,7 @@ class MainWindow(QMainWindow):
             icon = self.style().standardIcon(QStyle.SP_ComputerIcon)
 
         self._tray_icon = QSystemTrayIcon(icon, self)
-        self._tray_icon.setToolTip("Tailscale GUI")
+        self._tray_icon.setToolTip("TailUI")
 
         menu = QMenu(self)
         self._tray_show_action = menu.addAction("Ukryj okno")
@@ -582,7 +585,7 @@ class MainWindow(QMainWindow):
             self._tray_show_action.setText("Ukryj okno" if not self.isHidden() else "Pokaż okno")
 
         tooltip_state = "połączony" if connected else "rozłączony"
-        self._tray_icon.setToolTip(f"Tailscale GUI — {tooltip_state}")
+        self._tray_icon.setToolTip(f"TailUI — {tooltip_state}")
 
     def closeEvent(self, event):
         if self._tray_icon and self._tray_icon.isVisible() and not self._tray_force_exit:
@@ -590,7 +593,7 @@ class MainWindow(QMainWindow):
             self._hide_window_to_tray()
             if not self._tray_message_shown:
                 self._tray_icon.showMessage(
-                    "Tailscale GUI",
+                    "TailUI",
                     "Aplikacja działa w tle w zasobniku.",
                     QSystemTrayIcon.Information,
                     4000,
@@ -1045,25 +1048,26 @@ class MainWindow(QMainWindow):
                         ipv6_list.append(normalized)
                     else:
                         ipv4_list.append(normalized)
-
-            ips = ", ".join(ip for ip in (d.tailnet_ips or []) if ip) if (d.tailnet_ips) else "-"
+            addresses_text = ", ".join(ip for ip in (d.tailnet_ips or []) if ip) if (d.tailnet_ips) else "-"
             item = QTreeWidgetItem([
                 d.name,
-                ips,
+                "",
                 status_text,
                 exit_text,
                 d.os or "-"
             ])
             item.setData(1, self.DEVICE_IPV4_ROLE, ipv4_list)
             item.setData(1, self.DEVICE_IPV6_ROLE, ipv6_list)
+            item.setData(1, self.DEVICE_ADDR_TEXT_ROLE, addresses_text)
             if not d.online:
                 for col in range(self.devices_tree.columnCount()):
                     item.setForeground(col, QColor('#888'))
             if d.is_exit_node:
                 item.setForeground(3, QColor('#ffd479'))
             self.devices_tree.addTopLevelItem(item)
-            address_widget = self._create_device_addresses_widget(ips, ipv4_list, ipv6_list)
+            address_widget = self._create_device_addresses_widget(addresses_text, ipv4_list, ipv6_list)
             self.devices_tree.setItemWidget(item, 1, address_widget)
+            self._update_device_item_size(item)
         header = self.devices_tree.header()
         for i in range(self.devices_tree.columnCount()):
             if i == 1:
@@ -1074,46 +1078,116 @@ class MainWindow(QMainWindow):
         if header.sectionSize(1) < 420:
             header.resizeSection(1, 420)
 
+        self._refresh_device_items_layout()
+
     def _create_device_addresses_widget(self, addresses_text: str, ipv4_list: List[str], ipv6_list: List[str]) -> QWidget:
         container = QWidget()
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(4, 0, 4, 0)
-        layout.setSpacing(4)
         container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+
+        outer_layout = QVBoxLayout(container)
+        outer_layout.setContentsMargins(4, 0, 4, 0)
+        outer_layout.setSpacing(2)
+        outer_layout.setSizeConstraint(QLayout.SetMinimumSize)
 
         label = QLabel(addresses_text or "-")
         label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        label.setAlignment(Qt.AlignLeft | Qt.AlignTop)
         label.setWordWrap(True)
         label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
-        layout.addWidget(label, 1)
+        outer_layout.addWidget(label, 1)
 
-        if ipv4_list:
-            ipv4_btn = QToolButton(container)
-            ipv4_btn.setText("IPv4")
-            ipv4_btn.setObjectName("AddressCopyButton")
-            ipv4_btn.setAutoRaise(True)
-            ipv4_btn.setFocusPolicy(Qt.NoFocus)
-            ipv4_btn.setCursor(Qt.PointingHandCursor)
-            ipv4_btn.setToolTip("Skopiuj adresy IPv4")
-            ipv4_btn.clicked.connect(
-                lambda _=False, ips=list(ipv4_list): self._copy_ips_list(ips, "Adresy IPv4 urządzenia")
-            )
-            layout.addWidget(ipv4_btn)
+        buttons_present = bool(ipv4_list or ipv6_list)
+        if buttons_present:
+            buttons_row = QHBoxLayout()
+            buttons_row.setContentsMargins(0, 0, 0, 0)
+            buttons_row.setSpacing(4)
+            buttons_row.addStretch(1)
 
-        if ipv6_list:
-            ipv6_btn = QToolButton(container)
-            ipv6_btn.setText("IPv6")
-            ipv6_btn.setObjectName("AddressCopyButton")
-            ipv6_btn.setAutoRaise(True)
-            ipv6_btn.setFocusPolicy(Qt.NoFocus)
-            ipv6_btn.setCursor(Qt.PointingHandCursor)
-            ipv6_btn.setToolTip("Skopiuj adresy IPv6")
-            ipv6_btn.clicked.connect(
-                lambda _=False, ips=list(ipv6_list): self._copy_ips_list(ips, "Adresy IPv6 urządzenia")
-            )
-            layout.addWidget(ipv6_btn)
+            if ipv4_list:
+                ipv4_btn = QToolButton(container)
+                ipv4_btn.setText("IPv4")
+                ipv4_btn.setObjectName("AddressCopyButton")
+                ipv4_btn.setAutoRaise(True)
+                ipv4_btn.setFocusPolicy(Qt.NoFocus)
+                ipv4_btn.setCursor(Qt.PointingHandCursor)
+                ipv4_btn.setToolTip("Skopiuj adresy IPv4")
+                ipv4_btn.clicked.connect(
+                    lambda _=False, ips=list(ipv4_list): self._copy_ips_list(ips, "Adresy IPv4 urządzenia")
+                )
+                buttons_row.addWidget(ipv4_btn)
+
+            if ipv6_list:
+                ipv6_btn = QToolButton(container)
+                ipv6_btn.setText("IPv6")
+                ipv6_btn.setObjectName("AddressCopyButton")
+                ipv6_btn.setAutoRaise(True)
+                ipv6_btn.setFocusPolicy(Qt.NoFocus)
+                ipv6_btn.setCursor(Qt.PointingHandCursor)
+                ipv6_btn.setToolTip("Skopiuj adresy IPv6")
+                ipv6_btn.clicked.connect(
+                    lambda _=False, ips=list(ipv6_list): self._copy_ips_list(ips, "Adresy IPv6 urządzenia")
+                )
+                buttons_row.addWidget(ipv6_btn)
+
+            outer_layout.addLayout(buttons_row)
 
         return container
+
+    @staticmethod
+    def _get_device_addresses_text(item: Optional[QTreeWidgetItem]) -> str:
+        if not item:
+            return ""
+        value = item.data(1, MainWindow.DEVICE_ADDR_TEXT_ROLE)
+        if value is None:
+            return ""
+        return str(value).strip()
+
+    def _update_device_item_size(self, item: QTreeWidgetItem, column_width: Optional[int] = None):
+        if not item:
+            return
+        widget = self.devices_tree.itemWidget(item, 1)
+        if not widget:
+            return
+
+        if column_width is None:
+            column_width = self.devices_tree.columnWidth(1)
+        available_width = max(80, column_width - 12)
+
+        original_min = widget.minimumWidth()
+        original_max = widget.maximumWidth()
+        widget.setMinimumWidth(available_width)
+        widget.setMaximumWidth(available_width)
+
+        layout = widget.layout()
+        if layout:
+            layout.activate()
+
+        widget.adjustSize()
+        size_hint = widget.sizeHint()
+        item.setSizeHint(1, size_hint)
+
+        widget.setMinimumWidth(original_min)
+        widget.setMaximumWidth(original_max)
+
+    def _refresh_device_items_layout(self):
+        if not hasattr(self, "devices_tree"):
+            self._devices_layout_refresh_pending = False
+            return
+        column_width = self.devices_tree.columnWidth(1)
+        for index in range(self.devices_tree.topLevelItemCount()):
+            item = self.devices_tree.topLevelItem(index)
+            self._update_device_item_size(item, column_width)
+        self._devices_layout_refresh_pending = False
+
+    def _schedule_devices_layout_refresh(self):
+        if self._devices_layout_refresh_pending:
+            return
+        self._devices_layout_refresh_pending = True
+        QTimer.singleShot(0, self._refresh_device_items_layout)
+
+    def _on_devices_section_resized(self, logical_index: int, old_size: int, new_size: int):
+        if logical_index == 1:
+            self._schedule_devices_layout_refresh()
 
     def _update_self_ips(self, device: Optional[Device]):
         self._self_ipv4_list = []
@@ -1152,7 +1226,7 @@ class MainWindow(QMainWindow):
 
         menu = QMenu(self.devices_tree)
         name = item.text(0).strip()
-        addresses = item.text(1).strip()
+        addresses = self._get_device_addresses_text(item)
         ipv4_list = item.data(1, self.DEVICE_IPV4_ROLE) or []
         ipv6_list = item.data(1, self.DEVICE_IPV6_ROLE) or []
 
@@ -1180,7 +1254,7 @@ class MainWindow(QMainWindow):
 
     def _on_device_item_double_clicked(self, item, column):
         if column == 1:
-            addresses = item.text(1).strip()
+            addresses = self._get_device_addresses_text(item)
             if addresses and addresses != "-":
                 self._copy_to_clipboard(addresses.replace(", ", "\n"), "Adresy urządzenia")
         elif column == 0:
@@ -1255,6 +1329,13 @@ class MainWindow(QMainWindow):
 
 def run():
     app = QApplication(sys.argv)
+    app.setApplicationName("tailui")
+    app.setApplicationDisplayName("TailUI")
+    app.setOrganizationName("tailui")
+    try:
+        QGuiApplication.setDesktopFileName("tailui.desktop")
+    except AttributeError:
+        pass
     app_icon = _load_app_icon()
     if app_icon:
         app.setWindowIcon(app_icon)
