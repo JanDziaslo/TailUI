@@ -23,7 +23,7 @@
 - Python 3.10+ (testowane z 3.10/3.11).
 - Zainstalowana binarka `tailscale` w `PATH` dla pełnego sterowania (opcjonalna dla trybu tylko podgląd).
 - Biblioteki z `requirements.txt` (`PySide6`, `requests`, zależności testowe `pytest`).
-
+ 
 ### Instalacja i uruchomienie
 ```bash
 python -m venv .venv
