@@ -14,7 +14,7 @@
 - Podgląd własnych adresów Tailnet (oddzielnie IPv4/IPv6) oraz przyciski kopiowania wybranych wartości.
 - Pobieranie publicznego IP wraz z informacjami o organizacji, ASN i lokalizacji z kilku źródeł (ipinfo, ipapi, ifconfig) i cache’owaniem wyników.
 - Ikona w zasobniku systemowym z akcjami (pokaż/ukryj okno, połącz, rozłącz, zakończ) i komunikatem o pracy w tle.
-- Ciemny motyw, skalowanie interfejsu, dezaktywacja elementów podczas operacji oraz obsługa schowka dla wszystkich kopiowanych danych.
+- Ciemny motyw, skalowanie interfejsu, dezaktywacja elementów podczas operacji oraz obsługa schowka dla wszystkich kopiowanych danych. 
 - Tryb tylko podgląd (gdy `tailscale` nie jest dostępny) – aplikacja nadal pokazuje informacje, ale blokuje operacje sterujące.
 
 ### Wymagania
