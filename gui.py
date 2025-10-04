@@ -734,6 +734,7 @@ class MainWindow(QMainWindow):
         )
 
     def _manual_refresh(self):
+        self.statusBar().showMessage("Odświeżanie...", 2000)
         self.refresh_status(force=True)
         self.fetch_public_ip(force=True)
 
@@ -1028,6 +1029,10 @@ class MainWindow(QMainWindow):
         )
 
     def _populate_devices(self, status):
+        # Zapisz pozycję przewijania przed wyczyszczeniem
+        scrollbar = self.devices_tree.verticalScrollBar()
+        scroll_position = scrollbar.value() if scrollbar else 0
+
         self.devices_tree.clear()
         for d in status.devices:
             flags = []
@@ -1079,6 +1084,10 @@ class MainWindow(QMainWindow):
             header.resizeSection(1, 420)
 
         self._refresh_device_items_layout()
+
+        # Przywróć pozycję przewijania po odświeżeniu listy
+        if scrollbar and scroll_position > 0:
+            scrollbar.setValue(scroll_position)
 
     def _create_device_addresses_widget(self, addresses_text: str, ipv4_list: List[str], ipv6_list: List[str]) -> QWidget:
         container = QWidget()
@@ -1285,6 +1294,11 @@ class MainWindow(QMainWindow):
 
     def eventFilter(self, obj, event):
         # Zdarzenia użytkownika wyzwalające przyspieszone odświeżenie
+        # Wykluczamy przewijanie na liście urządzeń, aby nie resetować pozycji
+        if event.type() == QEvent.Wheel:
+            if obj == self.devices_tree or obj == self.devices_tree.viewport():
+                return super().eventFilter(obj, event)
+
         if event.type() in (QEvent.MouseButtonPress, QEvent.KeyPress, QEvent.Wheel, QEvent.FocusIn):
             self._schedule_interaction_refresh()
         return super().eventFilter(obj, event)
