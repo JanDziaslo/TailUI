@@ -1091,12 +1091,11 @@ class MainWindow(QMainWindow):
 
     def _create_device_addresses_widget(self, addresses_text: str, ipv4_list: List[str], ipv6_list: List[str]) -> QWidget:
         container = QWidget()
-        container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         outer_layout = QVBoxLayout(container)
-        outer_layout.setContentsMargins(4, 0, 4, 0)
-        outer_layout.setSpacing(2)
-        outer_layout.setSizeConstraint(QLayout.SetMinimumSize)
+        outer_layout.setContentsMargins(4, 2, 4, 2)
+        outer_layout.setSpacing(4)
 
         label = QLabel(addresses_text or "-")
         label.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -1109,30 +1108,36 @@ class MainWindow(QMainWindow):
         if buttons_present:
             buttons_row = QHBoxLayout()
             buttons_row.setContentsMargins(0, 0, 0, 0)
-            buttons_row.setSpacing(4)
+            buttons_row.setSpacing(6)
             buttons_row.addStretch(1)
 
             if ipv4_list:
-                ipv4_btn = QToolButton(container)
+                ipv4_btn = QToolButton()
                 ipv4_btn.setText("IPv4")
                 ipv4_btn.setObjectName("AddressCopyButton")
                 ipv4_btn.setAutoRaise(True)
                 ipv4_btn.setFocusPolicy(Qt.NoFocus)
                 ipv4_btn.setCursor(Qt.PointingHandCursor)
                 ipv4_btn.setToolTip("Skopiuj adresy IPv4")
+                ipv4_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                ipv4_btn.setMinimumSize(55, 26)
+                ipv4_btn.setMaximumSize(55, 26)
                 ipv4_btn.clicked.connect(
                     lambda _=False, ips=list(ipv4_list): self._copy_ips_list(ips, "Adresy IPv4 urządzenia")
                 )
                 buttons_row.addWidget(ipv4_btn)
 
             if ipv6_list:
-                ipv6_btn = QToolButton(container)
+                ipv6_btn = QToolButton()
                 ipv6_btn.setText("IPv6")
                 ipv6_btn.setObjectName("AddressCopyButton")
                 ipv6_btn.setAutoRaise(True)
                 ipv6_btn.setFocusPolicy(Qt.NoFocus)
                 ipv6_btn.setCursor(Qt.PointingHandCursor)
                 ipv6_btn.setToolTip("Skopiuj adresy IPv6")
+                ipv6_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+                ipv6_btn.setMinimumSize(55, 26)
+                ipv6_btn.setMaximumSize(55, 26)
                 ipv6_btn.clicked.connect(
                     lambda _=False, ips=list(ipv6_list): self._copy_ips_list(ips, "Adresy IPv6 urządzenia")
                 )
@@ -1140,6 +1145,7 @@ class MainWindow(QMainWindow):
 
             outer_layout.addLayout(buttons_row)
 
+        container.setMinimumHeight(35 if not buttons_present else 60)
         return container
 
     @staticmethod
@@ -1160,23 +1166,25 @@ class MainWindow(QMainWindow):
 
         if column_width is None:
             column_width = self.devices_tree.columnWidth(1)
+
+        # Ustaw szerokość kontenera bez manipulowania min/max - to powodowało problemy
         available_width = max(80, column_width - 12)
 
-        original_min = widget.minimumWidth()
-        original_max = widget.maximumWidth()
-        widget.setMinimumWidth(available_width)
-        widget.setMaximumWidth(available_width)
+        # Znajdź label w widgecie i dostosuj jego szerokość
+        labels = widget.findChildren(QLabel)
+        if labels:
+            # Pierwszy label to ten z adresami
+            label = labels[0]
+            label.setMaximumWidth(available_width - 70)  # Pozostaw miejsce na przyciski
 
+        # Aktywuj layout aby przeliczyć rozmiary
         layout = widget.layout()
         if layout:
             layout.activate()
 
-        widget.adjustSize()
+        # Ustaw size hint bez zmiany własności widgetu
         size_hint = widget.sizeHint()
         item.setSizeHint(1, size_hint)
-
-        widget.setMinimumWidth(original_min)
-        widget.setMaximumWidth(original_max)
 
     def _refresh_device_items_layout(self):
         if not hasattr(self, "devices_tree"):
