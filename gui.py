@@ -739,9 +739,11 @@ class MainWindow(QMainWindow):
         self.fetch_public_ip(force=True)
 
     def _refresh_exit_nodes(self, status):
-        previous_value = self.exit_node_combo.currentData()
-        if previous_value is not None:
-            previous_value = str(previous_value)
+        # Zachowaj wybór użytkownika
+        user_selected_value = self.exit_node_combo.currentData()
+        if user_selected_value is not None:
+            user_selected_value = str(user_selected_value)
+        user_has_selection = self.exit_enable_checkbox.isChecked()
 
         self.exit_node_combo.blockSignals(True)
         self.exit_node_combo.clear()
@@ -773,7 +775,13 @@ class MainWindow(QMainWindow):
                 if preferred and preferred in self._exit_entries:
                     active_value = preferred
 
-        target_value = active_value or previous_value
+        # Jeśli użytkownik ma coś wybranego i włączone - zachowaj jego wybór
+        # Inaczej użyj aktualnego active_value z serwera
+        if user_has_selection and user_selected_value and user_selected_value in self._exit_entries:
+            target_value = user_selected_value
+        else:
+            target_value = active_value
+
         if target_value and target_value in self._exit_entries:
             idx = self.exit_node_combo.findData(target_value)
             if idx >= 0:
@@ -785,7 +793,12 @@ class MainWindow(QMainWindow):
 
         self._exit_active_value = active_value
         self.exit_enable_checkbox.blockSignals(True)
-        self.exit_enable_checkbox.setChecked(active_value is not None)
+        # Jeśli użytkownik miał włączone - nie wyłączaj
+        # Jeśli ma aktywny exit node z serwera - włącz
+        if user_has_selection:
+            self.exit_enable_checkbox.setChecked(True)
+        else:
+            self.exit_enable_checkbox.setChecked(active_value is not None)
         self.exit_enable_checkbox.blockSignals(False)
 
         self._sync_exit_controls_enabled()
