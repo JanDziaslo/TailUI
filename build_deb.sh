@@ -21,7 +21,7 @@ if [ ! -f "main.py" ] || [ ! -f "requirements.txt" ]; then
 fi
 
 # Pobranie wersji z pliku lub ustawienie domyślnej
-VERSION="1.0.4"
+VERSION="1.0.5"
 PACKAGE_NAME="tailui"
 MAINTAINER="Jan Dziasło i Ropucha"
 
