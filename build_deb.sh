@@ -21,14 +21,14 @@ if [ ! -f "main.py" ] || [ ! -f "requirements.txt" ]; then
 fi
 
 # Pobranie wersji z pliku lub ustawienie domyślnej
-VERSION="1.0.6"
+VERSION="1.0.7"
 PACKAGE_NAME="tailui"
 MAINTAINER="Jan Dziasło i Ropucha"
 
 echo -e "${YELLOW}Wersja pakietu: $VERSION${NC}"
 
 # Stworzenie tymczasowego katalogu dla pakietu
-BUILD_DIR="${PACKAGE_NAME}_${VERSION}_all"
+BUILD_DIR="${PACKAGE_NAME}_${VERSION}"
 echo -e "${YELLOW}Tworzenie struktury katalogów w $BUILD_DIR${NC}"
 
 # Usuń stary katalog jeśli istnieje
