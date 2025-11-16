@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
         self._exit_active_value: Optional[str] = None
         self._exit_has_nodes = False
         self._exit_busy = False
+        self._exit_pending_state: Optional[bool] = None  # None, True (włączanie), False (wyłączanie)
         self._tray_icon: Optional[QSystemTrayIcon] = None
         self._tray_connect_action = None
         self._tray_disconnect_action = None
@@ -739,11 +740,18 @@ class MainWindow(QMainWindow):
         self.fetch_public_ip(force=True)
 
     def _refresh_exit_nodes(self, status):
-        # Zachowaj wybór użytkownika
-        user_selected_value = self.exit_node_combo.currentData()
-        if user_selected_value is not None:
-            user_selected_value = str(user_selected_value)
-        user_has_selection = self.exit_enable_checkbox.isChecked()
+        # Sprawdź czy jesteśmy w trakcie operacji na exit node
+        # Jeśli tak, nie aktualizuj stanu checkbox/combo - użytkownik właśnie coś robi
+        in_exit_operation = self._exit_busy
+
+        # Zachowaj wybór użytkownika tylko jeśli NIE jesteśmy w trakcie operacji
+        user_selected_value = None
+        user_has_selection = False
+        if not in_exit_operation:
+            user_selected_value = self.exit_node_combo.currentData()
+            if user_selected_value is not None:
+                user_selected_value = str(user_selected_value)
+            user_has_selection = self.exit_enable_checkbox.isChecked()
 
         self.exit_node_combo.blockSignals(True)
         self.exit_node_combo.clear()
@@ -777,11 +785,11 @@ class MainWindow(QMainWindow):
 
         # Jeśli użytkownik ma coś wybranego i włączone - zachowaj jego wybór
         # Inaczej użyj aktualnego active_value z serwera
-        if user_has_selection and user_selected_value and user_selected_value in self._exit_entries:
+        if not in_exit_operation and user_has_selection and user_selected_value and user_selected_value in self._exit_entries:
             target_value = user_selected_value
         else:
             target_value = active_value
-
+        
         if target_value and target_value in self._exit_entries:
             idx = self.exit_node_combo.findData(target_value)
             if idx >= 0:
@@ -792,14 +800,21 @@ class MainWindow(QMainWindow):
         self.exit_node_combo.blockSignals(False)
 
         self._exit_active_value = active_value
-        self.exit_enable_checkbox.blockSignals(True)
-        # Jeśli użytkownik miał włączone - nie wyłączaj
-        # Jeśli ma aktywny exit node z serwera - włącz
-        if user_has_selection:
-            self.exit_enable_checkbox.setChecked(True)
-        else:
+
+        # Sprawdź czy oczekiwaliśmy na zmianę stanu i czy się zrealizowała
+        if self._exit_pending_state is not None:
+            expected_active = self._exit_pending_state  # True = powinien być aktywny, False = nieaktywny
+            actual_active = active_value is not None
+            if expected_active == actual_active:
+                # Zmiana została potwierdzona przez serwer - czyść pending state
+                self._exit_pending_state = None
+
+        # Jeśli jesteśmy w trakcie operacji LUB czekamy na potwierdzenie - nie dotykaj checkbox
+        if not in_exit_operation and self._exit_pending_state is None:
+            self.exit_enable_checkbox.blockSignals(True)
+            # Ustaw checkbox na podstawie rzeczywistego stanu z serwera
             self.exit_enable_checkbox.setChecked(active_value is not None)
-        self.exit_enable_checkbox.blockSignals(False)
+            self.exit_enable_checkbox.blockSignals(False)
 
         self._sync_exit_controls_enabled()
 
@@ -946,6 +961,7 @@ class MainWindow(QMainWindow):
                 return
             target = str(target)
             label = self.exit_node_combo.currentText()
+            self._exit_pending_state = True  # Oczekujemy włączenia exit node
             self._perform_exit_operation(
                 lambda: self.client.set_exit_node(target),
                 f"Exit node ustawiony: {label}"
@@ -954,6 +970,7 @@ class MainWindow(QMainWindow):
             if self._exit_active_value is None:
                 self.statusBar().showMessage("Exit node jest już wyłączony", 3000)
                 return
+            self._exit_pending_state = False  # Oczekujemy wyłączenia exit node
             self._perform_exit_operation(
                 lambda: self.client.set_exit_node(None),
                 "Exit node wyłączony"
@@ -978,6 +995,7 @@ class MainWindow(QMainWindow):
 
     def _on_exit_operation_error(self, msg: str):
         self._exit_busy = False
+        self._exit_pending_state = None  # Czyść pending state przy błędzie
         if msg:
             self._error(msg)
         self.refresh_status(force=True)
