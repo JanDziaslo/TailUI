@@ -256,13 +256,16 @@ class MainWindow(QMainWindow):
         devices_layout.addWidget(self.devices_tree)
         header = self.devices_tree.header()
         header.setStretchLastSection(False)
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setMinimumSectionSize(120)
-        header.resizeSection(1, 420)
+        # Ustaw początkową szerokość kolumn
+        header.resizeSection(0, 200)  # Nazwa - ograniczona szerokość
+        header.resizeSection(1, 450)  # Adresy - szeroka kolumna
+        header.setMaximumSectionSize(300)  # Maksymalna szerokość dla kolumny Nazwa
         header.sectionResized.connect(self._on_devices_section_resized)
 
         info_group = QGroupBox("Informacje o urządzeniu")
@@ -1201,7 +1204,7 @@ class MainWindow(QMainWindow):
         # Ustaw szerokość kontenera bez manipulowania min/max - to powodowało problemy
         available_width = max(80, column_width - 12)
 
-        # Znajdź label w widgecie i dostosuj jego szerokość
+        # Znajdź label w widgecie i dostosuj jego szerokości
         labels = widget.findChildren(QLabel)
         if labels:
             # Pierwszy label to ten z adresami

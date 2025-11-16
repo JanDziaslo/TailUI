@@ -22,6 +22,19 @@ def _run(cmd: List[str], timeout: int = 15) -> Tuple[int, str, str]:
         return 124, '', f"Timeout: {e}"
 
 
+def _extract_short_hostname(full_name: str) -> str:
+    """
+    Wyodrębnia krótką nazwę hosta z pełnej nazwy DNS.
+    Np. 'kubuntu-pc.tail1234.ts.net' -> 'kubuntu-pc'
+    """
+    if not full_name:
+        return full_name
+    # Jeśli nazwa zawiera kropkę, weź tylko pierwszą część (przed kropką)
+    if '.' in full_name:
+        return full_name.split('.')[0]
+    return full_name
+
+
 @dataclass
 class Device:
     name: str
@@ -73,14 +86,26 @@ class TailscaleClient:
         def parse_peer(key: str, value: Dict[str, Any]) -> Device:
             # In JSON structure keys maybe device ID, value is details
             hostinfo = value.get('Hostinfo') or value.get('HostInfo') or {}
-            name = hostinfo.get('Hostname') or value.get('DNSName') or key
+            raw_name = hostinfo.get('Hostname') or value.get('DNSName') or key
+            # Wyodrębnij krótką nazwę hosta (usuń sufiks tailscale)
+            name = _extract_short_hostname(raw_name)
             addrs = value.get('TailscaleIPs') or value.get('TailscaleIPs', [])
             if isinstance(addrs, str):
                 addrs = [addrs]
             exit_option = bool(value.get('ExitNodeOption') or value.get('ExitNodeAllowed', False))
             is_exit = bool(value.get('ExitNode', False))
             online = not bool(value.get('Online') is False)
-            os_name = hostinfo.get('OS') or hostinfo.get('OSVersion')
+
+            # Pobierz system operacyjny - sprawdź różne możliwe pola
+            os_name = (
+                hostinfo.get('OS') or
+                hostinfo.get('OSVersion') or
+                hostinfo.get('OperatingSystem') or
+                hostinfo.get('OSName') or
+                value.get('OS') or
+                value.get('OSVersion')
+            )
+
             device_id = value.get('ID') or value.get('Id') or key
             return Device(name=name, tailnet_ips=addrs or [], os=os_name, online=online,
                           exit_node_option=exit_option, is_exit_node=is_exit,
@@ -233,3 +258,4 @@ class TailscaleClient:
 
 def tailscale_available() -> bool:
     return _which('tailscale') is not None
+
