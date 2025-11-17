@@ -115,18 +115,18 @@ EOF
 
 # Stwórz PKGBUILD
 echo -e "${YELLOW}Tworzenie pliku PKGBUILD${NC}"
-cat > "$BUILD_DIR/PKGBUILD" << 'PKGBUILD_EOF'
-# Maintainer: Jan Dziasło i Ropucha
-pkgname=tailui
-pkgver=1.0.7
-pkgrel=1
+cat > "$BUILD_DIR/PKGBUILD" << PKGBUILD_EOF
+# Maintainer: $MAINTAINER
+pkgname=$PACKAGE_NAME
+pkgver=$VERSION
+pkgrel=$PKGREL
 pkgdesc='Nieoficjalny interfejs graficzny dla Tailscale'
 arch=('any')
 url='https://github.com/JanDziaslo/tailui'
 license=('MIT')
 depends=(
     'python>=3.10'
-    'python-pyside6'
+    'pyside6'
     'python-requests'
     'tailscale'
 )
@@ -161,57 +161,57 @@ md5sums=(
 
 package() {
     # Utwórz katalogi
-    install -dm755 "${pkgdir}/usr/share/${pkgname}"
-    install -dm755 "${pkgdir}/usr/bin"
-    install -dm755 "${pkgdir}/usr/share/applications"
+    install -dm755 "\${pkgdir}/usr/share/\${pkgname}"
+    install -dm755 "\${pkgdir}/usr/bin"
+    install -dm755 "\${pkgdir}/usr/share/applications"
 
     # Zainstaluj pliki aplikacji
-    install -Dm644 main.py "${pkgdir}/usr/share/${pkgname}/main.py"
-    install -Dm644 tailscale_client.py "${pkgdir}/usr/share/${pkgname}/tailscale_client.py"
-    install -Dm644 ip_info.py "${pkgdir}/usr/share/${pkgname}/ip_info.py"
-    install -Dm644 gui.py "${pkgdir}/usr/share/${pkgname}/gui.py"
+    install -Dm644 main.py "\${pkgdir}/usr/share/\${pkgname}/main.py"
+    install -Dm644 tailscale_client.py "\${pkgdir}/usr/share/\${pkgname}/tailscale_client.py"
+    install -Dm644 ip_info.py "\${pkgdir}/usr/share/\${pkgname}/ip_info.py"
+    install -Dm644 gui.py "\${pkgdir}/usr/share/\${pkgname}/gui.py"
 
     # Zainstaluj config.py jeśli istnieje
     if [ -f "config.py" ]; then
-        install -Dm644 config.py "${pkgdir}/usr/share/${pkgname}/config.py"
+        install -Dm644 config.py "\${pkgdir}/usr/share/\${pkgname}/config.py"
     fi
 
     # Zainstaluj requirements.txt dla referencji
     if [ -f "requirements.txt" ]; then
-        install -Dm644 requirements.txt "${pkgdir}/usr/share/${pkgname}/requirements.txt"
+        install -Dm644 requirements.txt "\${pkgdir}/usr/share/\${pkgname}/requirements.txt"
     fi
 
     # Zainstaluj ikony
     if [ -f "assets_icon_tailui.png" ]; then
-        install -Dm644 assets_icon_tailui.png "${pkgdir}/usr/share/${pkgname}/assets_icon_tailui.png"
-        install -Dm644 assets_icon_tailui.png "${pkgdir}/usr/share/icons/hicolor/48x48/apps/${pkgname}.png"
+        install -Dm644 assets_icon_tailui.png "\${pkgdir}/usr/share/\${pkgname}/assets_icon_tailui.png"
+        install -Dm644 assets_icon_tailui.png "\${pkgdir}/usr/share/icons/hicolor/48x48/apps/\${pkgname}.png"
     fi
 
     if [ -f "assets_icon_tailui.svg" ]; then
-        install -Dm644 assets_icon_tailui.svg "${pkgdir}/usr/share/${pkgname}/assets_icon_tailui.svg"
-        install -Dm644 assets_icon_tailui.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/${pkgname}.svg"
+        install -Dm644 assets_icon_tailui.svg "\${pkgdir}/usr/share/\${pkgname}/assets_icon_tailui.svg"
+        install -Dm644 assets_icon_tailui.svg "\${pkgdir}/usr/share/icons/hicolor/scalable/apps/\${pkgname}.svg"
     fi
 
     # Zainstaluj plik .desktop
-    install -Dm644 tailui.desktop "${pkgdir}/usr/share/applications/${pkgname}.desktop"
+    install -Dm644 tailui.desktop "\${pkgdir}/usr/share/applications/\${pkgname}.desktop"
 
     # Zainstaluj dokumentację
     if [ -f "README.md" ]; then
-        install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+        install -Dm644 README.md "\${pkgdir}/usr/share/doc/\${pkgname}/README.md"
     fi
 
     if [ -f "LICENSE" ]; then
-        install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+        install -Dm644 LICENSE "\${pkgdir}/usr/share/licenses/\${pkgname}/LICENSE"
     fi
 
     # Stwórz skrypt uruchamiający
-    cat > "${pkgdir}/usr/bin/${pkgname}" << 'EOFSCRIPT'
+    cat > "\${pkgdir}/usr/bin/\${pkgname}" << 'EOFSCRIPT'
 #!/bin/bash
 cd /usr/share/tailui
-exec python3 main.py "$@"
+exec python3 main.py "\$@"
 EOFSCRIPT
 
-    chmod 755 "${pkgdir}/usr/bin/${pkgname}"
+    chmod 755 "\${pkgdir}/usr/bin/\${pkgname}"
 }
 PKGBUILD_EOF
 
@@ -308,24 +308,26 @@ if [ -z "$PACKAGE_FILE" ]; then
     exit 1
 fi
 
-# Przenieś pakiet do głównego katalogu
-PACKAGE_NAME=$(basename "$PACKAGE_FILE")
-mv "$PACKAGE_FILE" "./"
+# Przenieś pakiet do głównego katalogu i zmień nazwę
+PACKAGE_BASENAME=$(basename "$PACKAGE_FILE")
+FINAL_PACKAGE_NAME="${PACKAGE_NAME}_${VERSION}.pkg.tar.zst"
+
+mv "$PACKAGE_FILE" "./$FINAL_PACKAGE_NAME"
 
 echo -e "${GREEN}=== Pakiet został utworzony pomyślnie ===${NC}"
-echo -e "${GREEN}Plik: $PACKAGE_NAME${NC}"
+echo -e "${GREEN}Plik: $FINAL_PACKAGE_NAME${NC}"
 echo ""
 echo -e "${BLUE}Aby zainstalować pakiet na systemie Arch Linux:${NC}"
-echo "  sudo pacman -U $PACKAGE_NAME"
+echo "  sudo pacman -U $FINAL_PACKAGE_NAME"
 echo ""
 echo -e "${BLUE}Lub użyj yay/paru jeśli używasz AUR:${NC}"
-echo "  yay -U $PACKAGE_NAME"
+echo "  yay -U $FINAL_PACKAGE_NAME"
 echo ""
 echo -e "${BLUE}Aby sprawdzić zawartość pakietu:${NC}"
-echo "  tar -tzf $PACKAGE_NAME | less"
+echo "  tar --use-compress-program=unzstd -tf $FINAL_PACKAGE_NAME | less"
 echo ""
 echo -e "${BLUE}Aby uzyskać informacje o pakiecie:${NC}"
-echo "  tar -xOf $PACKAGE_NAME .PKGINFO | less"
+echo "  tar --use-compress-program=unzstd -xOf $FINAL_PACKAGE_NAME .PKGINFO | less"
 echo ""
 
 # Opcjonalnie usuń katalog tymczasowy

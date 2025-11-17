@@ -55,6 +55,11 @@ cp ip_info.py "$BUILD_DIR/"
 cp gui.py "$BUILD_DIR/"
 cp requirements.txt "$BUILD_DIR/"
 
+# Skopiuj config.py jeśli istnieje
+if [ -f "config.py" ]; then
+    cp config.py "$BUILD_DIR/"
+fi
+
 # Skopiuj ikony jeśli istnieją
 if [ -f "assets_icon_tailui.png" ]; then
     cp assets_icon_tailui.png "$BUILD_DIR/"
@@ -114,7 +119,7 @@ cd ..
 echo -e "${YELLOW}Tworzenie pliku PKGBUILD${NC}"
 cat > "$BUILD_DIR/PKGBUILD" << EOF
 # Maintainer: $MAINTAINER
-pkgname=tailui
+pkgname=$PACKAGE_NAME
 pkgver=$VERSION
 pkgrel=$PKGREL
 pkgdesc='Nieoficjalny interfejs graficzny dla Tailscale'
@@ -123,7 +128,7 @@ url='https://github.com/JanDziaslo/tailui'
 license=('MIT')
 depends=(
     'python>=3.10'
-    'python-pyside6'
+    'pyside6'
     'python-requests'
     'tailscale'
 )
@@ -135,6 +140,7 @@ source=(
     'gui.py'
     'requirements.txt'
     'tailui.desktop'
+    'config.py'
 )
 
 # Dodaj ikony do source jeśli istnieją
@@ -155,6 +161,7 @@ if [ -f "LICENSE" ]; then
 fi
 
 md5sums=(
+    SKIP
     SKIP
     SKIP
     SKIP
@@ -191,6 +198,11 @@ package() {
     install -Dm644 tailscale_client.py "\${pkgdir}/usr/share/\${pkgname}/tailscale_client.py"
     install -Dm644 ip_info.py "\${pkgdir}/usr/share/\${pkgname}/ip_info.py"
     install -Dm644 gui.py "\${pkgdir}/usr/share/\${pkgname}/gui.py"
+
+    # Zainstaluj config.py jeśli istnieje
+    if [ -f "config.py" ]; then
+        install -Dm644 config.py "\${pkgdir}/usr/share/\${pkgname}/config.py"
+    fi
 
     # Zainstaluj requirements.txt dla referencji
     if [ -f "requirements.txt" ]; then
@@ -281,7 +293,7 @@ sed -i "/^optdepends=/a install=tailui.install" "$BUILD_DIR/PKGBUILD"
 echo -e "${YELLOW}Sprawdzanie dostępności zależności w systemie${NC}"
 MISSING_DEPS=""
 
-for dep in python python-pyside6 python-requests tailscale; do
+for dep in python pyside6 python-requests tailscale; do
     if [ "$dep" = "tailscale" ]; then
         if ! command -v tailscale >/dev/null 2>&1; then
             MISSING_DEPS="$MISSING_DEPS $dep"
@@ -322,24 +334,26 @@ if [ -z "$PACKAGE_FILE" ]; then
     exit 1
 fi
 
-# Przenieś pakiet do głównego katalogu
-PACKAGE_NAME=$(basename "$PACKAGE_FILE")
-mv "$PACKAGE_FILE" "./"
+# Przenieś pakiet do głównego katalogu i zmień nazwę
+PACKAGE_BASENAME=$(basename "$PACKAGE_FILE")
+FINAL_PACKAGE_NAME="${PACKAGE_NAME}_${VERSION}.pkg.tar.zst"
+
+mv "$PACKAGE_FILE" "./$FINAL_PACKAGE_NAME"
 
 echo -e "${GREEN}=== Pakiet został utworzony pomyślnie ===${NC}"
-echo -e "${GREEN}Plik: $PACKAGE_NAME${NC}"
+echo -e "${GREEN}Plik: $FINAL_PACKAGE_NAME${NC}"
 echo ""
 echo -e "${BLUE}Aby zainstalować pakiet:${NC}"
-echo "  sudo pacman -U $PACKAGE_NAME"
+echo "  sudo pacman -U $FINAL_PACKAGE_NAME"
 echo ""
 echo -e "${BLUE}Lub użyj yay/paru jeśli używasz AUR:${NC}"
-echo "  yay -U $PACKAGE_NAME"
+echo "  yay -U $FINAL_PACKAGE_NAME"
 echo ""
 echo -e "${BLUE}Aby sprawdzić zawartość pakietu:${NC}"
-echo "  tar -tzf $PACKAGE_NAME | less"
+echo "  tar --use-compress-program=unzstd -tf $FINAL_PACKAGE_NAME | less"
 echo ""
 echo -e "${BLUE}Aby uzyskać informacje o pakiecie:${NC}"
-echo "  pacman -Qip $PACKAGE_NAME"
+echo "  pacman -Qip $FINAL_PACKAGE_NAME"
 echo ""
 
 # Opcjonalnie usuń katalog tymczasowy
