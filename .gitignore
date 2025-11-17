@@ -124,3 +124,5 @@ dmypy.json
 # DEB packaging
 *.deb
 tailscale-gui_*/
+# pakiety archa
+*pkg.tar.zst
