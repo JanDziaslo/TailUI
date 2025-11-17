@@ -73,7 +73,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("TailUI")
-        self.resize(1000, 700)
+        self.resize(1100, 900)
 
         self.client: Optional[TailscaleClient] = None
         self.ip_fetcher = PublicIPFetcher(ttl=180)
@@ -352,130 +352,139 @@ class MainWindow(QMainWindow):
     def _apply_styles(self):
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #282a36;
+                background-color: #2b2d30;
             }
             QLabel {
-                color: #f8f8f2;
+                color: #c9d1d9;
             }
             QLabel#AppTitle {
                 font-size: 20px;
                 font-weight: bold;
-                color: #bd93f9;
+                color: #8ab4f8;
             }
             QLabel#LastRefresh {
-                color: #6272a4;
+                color: #8b949e;
                 font-size: 11px;
             }
             QGroupBox {
-                background-color: #2c2e3a;
-                border: 1px solid #44475a;
+                background-color: #313335;
+                border: 1px solid #454749;
                 border-radius: 8px;
                 margin-top: 1ex;
                 font-weight: bold;
-                color: #bd93f9;
+                color: #9db1c5;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 subcontrol-position: top left;
                 padding: 0 10px;
-                background-color: #343746;
+                background-color: #3c3f41;
                 border-radius: 4px;
-                color: #f8f8f2;
+                color: #c9d1d9;
                 left: 10px;
             }
             QPushButton {
-                background-color: #44475a;
-                color: #f8f8f2;
+                background-color: #4c5052;
+                color: #dfe1e5;
                 border: none;
                 padding: 8px 16px;
                 border-radius: 6px;
                 font-weight: bold;
             }
             QPushButton:hover {
-                background-color: #5a5c70;
+                background-color: #5a6164;
+                color: #ffffff;
             }
             QPushButton:pressed {
-                background-color: #3a3c4a;
+                background-color: #3d4043;
             }
             QPushButton:disabled {
-                background-color: #3a3c4a;
-                color: #6272a4;
+                background-color: #3c3f41;
+                color: #6e7681;
             }
 
             QToolButton#AddressCopyButton {
-                background-color: #44475a;
-                color: #f8f8f2;
+                background-color: #4c5052;
+                color: #dfe1e5;
                 border: none;
                 padding: 4px 10px;
                 border-radius: 4px;
                 font-weight: bold;
             }
             QToolButton#AddressCopyButton:hover {
-                background-color: #5a5c70;
+                background-color: #5a6164;
+                color: #ffffff;
             }
             QToolButton#AddressCopyButton:pressed {
-                background-color: #3a3c4a;
+                background-color: #3d4043;
             }
             QToolButton#AddressCopyButton:disabled {
-                background-color: #3a3c4a;
-                color: #6272a4;
+                background-color: #3c3f41;
+                color: #6e7681;
             }
 
             QPushButton#ToggleButton[connected="true"] {
-                background-color: #ff5555;
-                color: #282a36;
+                background-color: #d73a49;
+                color: #ffffff;
             }
             QPushButton#ToggleButton[connected="true"]:hover {
-                background-color: #ff7070;
+                background-color: #e5505e;
             }
             QPushButton#ToggleButton[connected="false"] {
-                background-color: #50fa7b;
-                color: #282a36;
+                background-color: #28a745;
+                color: #ffffff;
             }
             QPushButton#ToggleButton[connected="false"]:hover {
-                background-color: #69ff8c;
+                background-color: #34c759;
             }
             QTreeWidget {
-                background-color: #2c2e3a;
-                border: 1px solid #44475a;
+                background-color: #313335;
+                border: 1px solid #454749;
                 border-radius: 6px;
-                color: #f8f8f2;
+                color: #c9d1d9;
             }
             QTreeWidget::item {
                 padding: 4px 2px;
             }
             QTreeWidget::item:selected {
-                background-color: #44475a;
+                background-color: #3e4447;
+                color: #ffffff;
+            }
+            QTreeWidget::item:hover {
+                background-color: #383b3d;
             }
             QHeaderView::section {
-                background-color: #343746;
-                color: #bd93f9;
+                background-color: #3c3f41;
+                color: #8ab4f8;
                 padding: 6px;
-                border: 1px solid #44475a;
+                border: 1px solid #454749;
                 font-weight: bold;
             }
             QComboBox {
-                background-color: #2c2e3a;
-                border: 1px solid #44475a;
+                background-color: #313335;
+                border: 1px solid #454749;
                 border-radius: 4px;
                 padding: 4px;
-                color: #f8f8f2;
+                color: #c9d1d9;
+            }
+            QComboBox:hover {
+                border: 1px solid #5a6164;
             }
             QComboBox:disabled {
-                color: #6272a4;
+                color: #6e7681;
             }
             QComboBox::drop-down {
                 border: none;
             }
             QCheckBox {
-                color: #f8f8f2;
+                color: #c9d1d9;
             }
             QStatusBar {
-                background-color: #21222c;
-                color: #6272a4;
+                background-color: #282829;
+                color: #c9d1d9;
             }
             QSplitter::handle {
-                background-color: #44475a;
+                background-color: #454749;
             }
         """)
 
